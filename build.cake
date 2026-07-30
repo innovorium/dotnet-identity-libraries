@@ -13,19 +13,22 @@ var packageIds = new[]
     "Innovorium.AspNetCore.Identity.Marten",
     "Innovorium.OpenIddict.Marten"
 };
-var expectedPackageDependencies = new Dictionary<string, string[]>
+var expectedPackageDependencies = new Dictionary<string, Dictionary<string, string>>
 {
-    ["Innovorium.AspNetCore.Identity.Marten"] = new[]
+    ["Innovorium.AspNetCore.Identity.Marten"] = new()
     {
-        "Marten",
-        "Microsoft.Extensions.Identity.Stores"
+        ["Marten"] = "[9.21.0, 10.0.0)",
+        ["Microsoft.Extensions.Identity.Stores"] = "[10.0.10, 11.0.0)"
     },
-    ["Innovorium.OpenIddict.Marten"] = new[]
+    ["Innovorium.OpenIddict.Marten"] = new()
     {
-        "Marten",
-        "OpenIddict.Core"
+        ["Marten"] = "[9.21.0, 10.0.0)",
+        ["OpenIddict.Core"] = "[7.6.0, 8.0.0)"
     }
 };
+const string ExpectedLicenseExpression = "MIT";
+const string ExpectedRepositoryUrl = "https://github.com/innovorium/dotnet-identity-libraries";
+var sourceLinkKind = new Guid("CC110556-A091-4D38-9FEC-25AB9A351A6A");
 
 void RunProcessOrFail(FilePath executable, ProcessArgumentBuilder arguments)
 {
@@ -65,6 +68,71 @@ void RequireFile(FilePath path)
     if (!FileExists(path))
     {
         throw new CakeException($"Required package content is missing: {path}");
+    }
+}
+
+string GetRepositoryCommit()
+{
+    var process = StartAndReturnProcess(
+        "git",
+        new ProcessSettings
+        {
+            Arguments = "rev-parse HEAD",
+            RedirectStandardOutput = true
+        });
+    process.WaitForExit();
+    var commit = process.GetStandardOutput().SingleOrDefault()?.Trim();
+
+    if (process.GetExitCode() != 0 || string.IsNullOrWhiteSpace(commit))
+    {
+        throw new CakeException("Could not determine the repository commit for package inspection.");
+    }
+
+    return commit;
+}
+
+string RequireMetadataValue(System.Xml.Linq.XElement metadata, string name, string packageId)
+{
+    var elements = metadata.Elements().Where(element => element.Name.LocalName == name).ToArray();
+    if (elements.Length != 1 || string.IsNullOrWhiteSpace(elements[0].Value))
+    {
+        throw new CakeException($"Expected exactly one non-empty '{name}' element in {packageId} metadata.");
+    }
+
+    return elements[0].Value;
+}
+
+void InspectPortablePdb(FilePath pdb, string repositoryCommit)
+{
+    using var stream = System.IO.File.OpenRead(pdb.FullPath);
+    using var provider = System.Reflection.Metadata.MetadataReaderProvider.FromPortablePdbStream(stream);
+    var reader = provider.GetMetadataReader();
+    var sourceLinks = reader.CustomDebugInformation
+        .Select(handle => reader.GetCustomDebugInformation(handle))
+        .Where(information =>
+            information.Parent.Kind == System.Reflection.Metadata.HandleKind.ModuleDefinition &&
+            reader.GetGuid(information.Kind) == sourceLinkKind)
+        .ToArray();
+
+    if (sourceLinks.Length != 1)
+    {
+        throw new CakeException($"Expected one SourceLink record in portable PDB {pdb}, found {sourceLinks.Length}.");
+    }
+
+    using var sourceLink = System.Text.Json.JsonDocument.Parse(reader.GetBlobBytes(sourceLinks[0].Value));
+    if (!sourceLink.RootElement.TryGetProperty("documents", out var documents))
+    {
+        throw new CakeException($"SourceLink record in {pdb} does not contain a documents map.");
+    }
+
+    var mappings = documents.EnumerateObject().ToArray();
+    var expectedSourcePrefix = $"https://raw.githubusercontent.com/innovorium/dotnet-identity-libraries/{repositoryCommit}/";
+    if (mappings.Length == 0 || mappings.Any(mapping =>
+        mapping.Value.ValueKind != System.Text.Json.JsonValueKind.String ||
+        !mapping.Value.GetString()!.StartsWith(expectedSourcePrefix, StringComparison.Ordinal)))
+    {
+        throw new CakeException(
+            $"SourceLink mappings in {pdb} must reference repository commit {repositoryCommit}.");
     }
 }
 
@@ -149,6 +217,15 @@ Task("Inspect-Packages")
     .IsDependentOn("Pack")
     .Does(() =>
     {
+        var repositoryCommit = GetRepositoryCommit();
+        var packageFiles = GetFiles($"{packageDirectory}/*.*nupkg");
+        if (packageFiles.Count != packageIds.Length * 2)
+        {
+            throw new CakeException(
+                $"Expected exactly {packageIds.Length * 2} package artifacts, found {packageFiles.Count}.");
+        }
+
+        string? releaseVersion = null;
         foreach (var packageId in packageIds)
         {
             var package = GetPackage(packageId, ".nupkg");
@@ -165,27 +242,75 @@ Task("Inspect-Packages")
             var nuspec = packageContents.CombineWithFilePath($"{packageId}.nuspec");
             RequireFile(nuspec);
             RequireFile(packageContents.CombineWithFilePath($"lib/net10.0/{packageId}.dll"));
-            RequireFile(symbolContents.CombineWithFilePath($"lib/net10.0/{packageId}.pdb"));
+            var pdb = symbolContents.CombineWithFilePath($"lib/net10.0/{packageId}.pdb");
+            RequireFile(pdb);
 
-            var actualDependencies = System.Xml.Linq.XDocument
+            var metadata = System.Xml.Linq.XDocument
                 .Load(nuspec.FullPath)
                 .Descendants()
-                .Where(element => element.Name.LocalName == "dependency")
-                .Select(element => (string?)element.Attribute("id"))
-                .Where(id => id is not null)
-                .Select(id => id!)
-                .OrderBy(id => id, StringComparer.Ordinal)
-                .ToArray();
-            var expectedDependencies = expectedPackageDependencies[packageId]
-                .OrderBy(id => id, StringComparer.Ordinal)
-                .ToArray();
+                .Single(element => element.Name.LocalName == "metadata");
+            var packageVersion = PackageVersion(package, packageId);
+            var nuspecVersion = RequireMetadataValue(metadata, "version", packageId);
+            if (!string.Equals(RequireMetadataValue(metadata, "id", packageId), packageId, StringComparison.Ordinal) ||
+                !string.Equals(nuspecVersion, packageVersion, StringComparison.Ordinal))
+            {
+                throw new CakeException($"Package identity or version metadata does not match {package.GetFilename()}.");
+            }
 
-            if (!actualDependencies.SequenceEqual(expectedDependencies, StringComparer.Ordinal))
+            releaseVersion ??= packageVersion;
+            if (!string.Equals(releaseVersion, packageVersion, StringComparison.Ordinal))
             {
                 throw new CakeException(
-                    $"Unexpected dependencies in {packageId}: expected [{string.Join(", ", expectedDependencies)}], " +
-                    $"found [{string.Join(", ", actualDependencies)}].");
+                    $"Packages must share one release version; expected {releaseVersion}, found {packageVersion}.");
             }
+
+            var license = metadata.Elements().SingleOrDefault(element => element.Name.LocalName == "license");
+            if (license is null ||
+                !string.Equals((string?)license.Attribute("type"), "expression", StringComparison.Ordinal) ||
+                !string.Equals(license.Value, ExpectedLicenseExpression, StringComparison.Ordinal))
+            {
+                throw new CakeException($"{packageId} must declare the {ExpectedLicenseExpression} license expression.");
+            }
+
+            var repository = metadata.Elements().SingleOrDefault(element => element.Name.LocalName == "repository");
+            if (repository is null ||
+                !string.Equals((string?)repository.Attribute("type"), "git", StringComparison.Ordinal) ||
+                !string.Equals((string?)repository.Attribute("url"), ExpectedRepositoryUrl, StringComparison.Ordinal) ||
+                !string.Equals((string?)repository.Attribute("commit"), repositoryCommit, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new CakeException(
+                    $"{packageId} repository metadata must identify {ExpectedRepositoryUrl} at commit {repositoryCommit}.");
+            }
+
+            var dependencyGroups = metadata.Descendants()
+                .Where(element => element.Name.LocalName == "group")
+                .ToArray();
+            if (dependencyGroups.Length != 1 ||
+                !string.Equals((string?)dependencyGroups[0].Attribute("targetFramework"), "net10.0", StringComparison.Ordinal))
+            {
+                throw new CakeException($"{packageId} must contain exactly one net10.0 dependency group.");
+            }
+
+            var actualDependencies = dependencyGroups[0].Elements()
+                .Where(element => element.Name.LocalName == "dependency")
+                .ToDictionary(
+                    element => (string?)element.Attribute("id") ?? string.Empty,
+                    element => (string?)element.Attribute("version") ?? string.Empty,
+                    StringComparer.Ordinal);
+            var expectedDependencies = expectedPackageDependencies[packageId];
+
+            if (actualDependencies.Count != expectedDependencies.Count ||
+                expectedDependencies.Any(expected =>
+                    !actualDependencies.TryGetValue(expected.Key, out var version) ||
+                    !string.Equals(version, expected.Value, StringComparison.Ordinal)))
+            {
+                throw new CakeException(
+                    $"Unexpected dependency ranges in {packageId}: expected " +
+                    $"[{string.Join(", ", expectedDependencies.Select(dependency => $"{dependency.Key} {dependency.Value}"))}], " +
+                    $"found [{string.Join(", ", actualDependencies.Select(dependency => $"{dependency.Key} {dependency.Value}"))}].");
+            }
+
+            InspectPortablePdb(pdb, repositoryCommit);
         }
     });
 
@@ -249,7 +374,7 @@ Task("Consumer-Smoke-Test")
     });
 
 Task("Checksums")
-    .IsDependentOn("Pack")
+    .IsDependentOn("Inspect-Packages")
     .Does(() =>
     {
         var packages = GetFiles($"{packageDirectory}/*.*nupkg").OrderBy(path => path.FullPath);

@@ -8,18 +8,32 @@ permissions:
   contents: read
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
+    services:
+      postgres:
+        image: postgres:18.4
+        env:
+          POSTGRES_DB: innovorium_tests
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d innovorium_tests"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      INNOVORIUM_TEST_POSTGRES: Host=localhost;Port=5432;Database=innovorium_tests;Username=postgres;Password=postgres
+    outputs:
+      package-artifact-id: ${{ steps.upload-packages.outputs.artifact-id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -31,6 +45,40 @@ jobs:
 
       - name: Verify and pack
         run: dotnet cake --target Release --configuration Release
+
+      - name: Upload verified packages
+        id: upload-packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verified-packages-${{ github.sha }}
+          path: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg
+            artifacts/packages/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download verified packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.build.outputs.package-artifact-id }}
+          path: artifacts/packages
+          merge-multiple: true
+
+      - name: Verify package checksums
+        working-directory: artifacts/packages
+        run: sha256sum --check SHA256SUMS
 
       - name: Attest packages
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
@@ -48,6 +96,6 @@ jobs:
 
       - name: Create GitHub release
         env:
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
-          PRERELEASE_FLAG: ${{ contains(github.ref_name, '-') && '--prerelease' || '' }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/packages/*.*nupkg artifacts/packages/SHA256SUMS --verify-tag --generate-notes $PRERELEASE_FLAG
+        run: gh release create "$GITHUB_REF_NAME" artifacts/packages/*.*nupkg artifacts/packages/SHA256SUMS --verify-tag --generate-notes --prerelease=${{ contains(github.ref_name, '-') }}
