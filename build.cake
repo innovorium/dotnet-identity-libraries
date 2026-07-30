@@ -23,7 +23,9 @@ var expectedPackageDependencies = new Dictionary<string, Dictionary<string, stri
     ["Innovorium.OpenIddict.Marten"] = new()
     {
         ["Marten"] = "[9.21.0, 10.0.0)",
-        ["OpenIddict.Core"] = "[7.6.0, 8.0.0)"
+        ["Npgsql"] = "[9.0.4, 10.0.0)",
+        ["OpenIddict.Core"] = "[7.6.0, 8.0.0)",
+        ["Weasel.Storage"] = "[9.17.0, 10.0.0)"
     }
 };
 const string ExpectedLicenseExpression = "MIT";
@@ -324,57 +326,104 @@ Task("Consumer-Smoke-Test")
     {
         var identityPackage = GetPackage(packageIds[0], ".nupkg");
         var version = PackageVersion(identityPackage, packageIds[0]);
-        var project = consumerDirectory.CombineWithFilePath("Consumer.csproj");
-        var program = consumerDirectory.CombineWithFilePath("Program.cs");
-        var nugetConfig = consumerDirectory.CombineWithFilePath("NuGet.Config");
         var packageSource = MakeAbsolute(packageDirectory).FullPath;
+        var consumers = new[]
+        {
+            new
+            {
+                Name = "IdentityConsumer",
+                PackageId = packageIds[0],
+                Program = string.Join("\n", new[]
+                {
+                    "using Innovorium.AspNetCore.Identity.Marten;",
+                    "using Marten;",
+                    "using Microsoft.AspNetCore.Identity;",
+                    "using Microsoft.Extensions.DependencyInjection;",
+                    "",
+                    "var services = new ServiceCollection();",
+                    "services.AddMarten(_ => { });",
+                    "services.AddIdentityCore<ApplicationUser>()",
+                    "    .AddRoles<ApplicationRole>()",
+                    "    .AddMartenStores();",
+                    "",
+                    "sealed class ApplicationUser : MartenIdentityUser;",
+                    "sealed class ApplicationRole : MartenIdentityRole;"
+                })
+            },
+            new
+            {
+                Name = "OpenIddictConsumer",
+                PackageId = packageIds[1],
+                Program = string.Join("\n", new[]
+                {
+                    "using Innovorium.OpenIddict.Marten;",
+                    "using Marten;",
+                    "using Microsoft.Extensions.DependencyInjection;",
+                    "",
+                    "var services = new ServiceCollection();",
+                    "services.AddMarten(_ => { });",
+                    "services.AddOpenIddict()",
+                    "    .AddCore(options => options.UseMarten());"
+                })
+            }
+        };
 
-        System.IO.File.WriteAllText(
-            project.FullPath,
-            $"""
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup>
-                <OutputType>Exe</OutputType>
-                <TargetFramework>net10.0</TargetFramework>
-                <IsPackable>false</IsPackable>
-                <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
-              </PropertyGroup>
-              <ItemGroup>
-                <PackageReference Include="{packageIds[0]}" Version="{version}" />
-                <PackageReference Include="{packageIds[1]}" Version="{version}" />
-              </ItemGroup>
-            </Project>
-            """);
-        System.IO.File.WriteAllText(program.FullPath, "Console.WriteLine(\"Package consumer smoke test\");");
-        System.IO.File.WriteAllText(
-            nugetConfig.FullPath,
-            $"""
-            <?xml version="1.0" encoding="utf-8"?>
-            <configuration>
-              <packageSources>
-                <clear />
-                <add key="local" value="{System.Security.SecurityElement.Escape(packageSource)}" />
-                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
-              </packageSources>
-              <packageSourceMapping>
-                <packageSource key="local"><package pattern="Innovorium.*" /></packageSource>
-                <packageSource key="nuget.org"><package pattern="*" /></packageSource>
-              </packageSourceMapping>
-            </configuration>
-            """);
+        foreach (var consumer in consumers)
+        {
+            var directory = consumerDirectory.Combine(consumer.Name);
+            EnsureDirectoryExists(directory);
+            var project = directory.CombineWithFilePath($"{consumer.Name}.csproj");
+            var program = directory.CombineWithFilePath("Program.cs");
+            var nugetConfig = directory.CombineWithFilePath("NuGet.Config");
 
-        RunProcessOrFail(
-            "dotnet",
-            new ProcessArgumentBuilder()
-                .Append("restore")
-                .AppendQuoted(project.FullPath)
-                .AppendSwitchQuoted("--configfile", nugetConfig.FullPath));
-        RunProcessOrFail(
-            "dotnet",
-            new ProcessArgumentBuilder()
-                .Append("build")
-                .AppendQuoted(project.FullPath)
-                .Append("--configuration Release --no-restore"));
+            System.IO.File.WriteAllText(
+                project.FullPath,
+                $"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <IsPackable>false</IsPackable>
+                    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+                    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                    <RestorePackagesPath>../packages-cache</RestorePackagesPath>
+                  </PropertyGroup>
+                  <ItemGroup>
+                    <PackageReference Include="{consumer.PackageId}" Version="{version}" />
+                  </ItemGroup>
+                </Project>
+                """);
+            System.IO.File.WriteAllText(program.FullPath, consumer.Program);
+            System.IO.File.WriteAllText(
+                nugetConfig.FullPath,
+                $"""
+                <?xml version="1.0" encoding="utf-8"?>
+                <configuration>
+                  <packageSources>
+                    <clear />
+                    <add key="local" value="{System.Security.SecurityElement.Escape(packageSource)}" />
+                    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+                  </packageSources>
+                  <packageSourceMapping>
+                    <packageSource key="local"><package pattern="Innovorium.*" /></packageSource>
+                    <packageSource key="nuget.org"><package pattern="*" /></packageSource>
+                  </packageSourceMapping>
+                </configuration>
+                """);
+
+            RunProcessOrFail(
+                "dotnet",
+                new ProcessArgumentBuilder()
+                    .Append("restore")
+                    .AppendQuoted(project.FullPath)
+                    .AppendSwitchQuoted("--configfile", nugetConfig.FullPath));
+            RunProcessOrFail(
+                "dotnet",
+                new ProcessArgumentBuilder()
+                    .Append("build")
+                    .AppendQuoted(project.FullPath)
+                    .Append("--configuration Release --no-restore"));
+        }
     });
 
 Task("Checksums")
