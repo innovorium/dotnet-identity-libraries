@@ -2,7 +2,8 @@
 
 ## Current release boundary
 
-`0.1.0-alpha.2` is a nonfunctional foundation release. It does not provide a usable Identity or OpenIddict provider, and the project does not offer implementation, migration, architecture-review, or production-incident support for it.
+Support covers reproducible defects in the documented Identity and OpenIddict
+storage behavior of the latest functional release.
 
 There are no guaranteed response or resolution times. Participation is best effort and public by default, except for security reports.
 
@@ -15,7 +16,9 @@ There are no guaranteed response or resolution times. Participation is best effo
 | Focused request for future behavior or public API | [Feature proposal](https://github.com/innovorium/dotnet-identity-libraries/issues/new?template=feature.yml) | Problem, proposed contract, persistence, compatibility, and security effects |
 | Vulnerability or exposure | [Private security report](https://github.com/innovorium/dotnet-identity-libraries/security/advisories/new) | Follow [SECURITY.md](SECURITY.md); do not disclose publicly |
 
-For the current foundation release, use issues only for packaging or documentation defects. A missing provider API is expected, not a defect.
+For a provider release, report missing or incorrect documented behavior with a
+safe reproduction. Package-reservation releases are limited to packaging or
+documentation defects.
 
 ## What maintainers can act on
 

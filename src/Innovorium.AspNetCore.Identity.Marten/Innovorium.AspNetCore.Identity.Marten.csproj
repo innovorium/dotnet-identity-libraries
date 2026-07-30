@@ -5,6 +5,7 @@
     <Description>Marten persistence for ASP.NET Core Identity on .NET 10.</Description>
     <RootNamespace>Innovorium.AspNetCore.Identity.Marten</RootNamespace>
     <AssemblyName>Innovorium.AspNetCore.Identity.Marten</AssemblyName>
+    <PackageReadmeSource>$(MSBuildProjectDirectory)/README.md</PackageReadmeSource>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Marten" />

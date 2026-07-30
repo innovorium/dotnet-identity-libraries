@@ -1,8 +1,8 @@
 # Identity Marten source sample
 
 This is a minimal .NET 10 host that exercises `UserManager` and `RoleManager`
-through `AddMartenStores()`. It references the local provider project; it does
-**not** use the nonfunctional NuGet `0.1.0-alpha.2` package.
+through `AddMartenStores()`. It references the local provider project rather
+than a NuGet package, so it always exercises the checked-out source revision.
 
 ## Run from a repository checkout
 
@@ -33,5 +33,6 @@ customer data, organization membership, and authorization policy in host-owned
 models keyed by `ApplicationUser.Id`; this provider does not create or manage
 them.
 
-This source snapshot is unreleased. Read the root [README](../../README.md) and
-[compatibility policy](../../docs/compatibility.md) before evaluating it.
+Read the root [README](../../README.md) and
+[compatibility policy](../../docs/compatibility.md) before evaluating it or
+switching the sample to a released package reference.

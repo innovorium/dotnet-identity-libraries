@@ -2,8 +2,8 @@
 
 This minimal .NET 10 host registers the Marten OpenIddict stores and creates an
 application through `OpenIddictApplicationManager`. It references the local
-provider project; it does **not** use the nonfunctional NuGet `0.1.0-alpha.2`
-package.
+provider project rather than a NuGet package, so it always exercises the
+checked-out source revision.
 
 ## What it demonstrates
 
@@ -37,5 +37,6 @@ curl -X POST http://127.0.0.1:5051/applications \
 Do not use this sample as an issuer configuration or a production client
 registration workflow. Keep client secrets, signing credentials, issuer policy,
 and operational management in the host application and secure delivery process.
-This source snapshot is unreleased; read the root [README](../../README.md) and
-[compatibility policy](../../docs/compatibility.md) before evaluating it.
+Read the root [README](../../README.md) and
+[compatibility policy](../../docs/compatibility.md) before evaluating it or
+switching the sample to a released package reference.

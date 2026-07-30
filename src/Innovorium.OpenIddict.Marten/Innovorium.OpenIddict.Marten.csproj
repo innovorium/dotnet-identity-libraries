@@ -5,6 +5,7 @@
     <Description>Marten persistence for OpenIddict on .NET 10.</Description>
     <RootNamespace>Innovorium.OpenIddict.Marten</RootNamespace>
     <AssemblyName>Innovorium.OpenIddict.Marten</AssemblyName>
+    <PackageReadmeSource>$(MSBuildProjectDirectory)/README.md</PackageReadmeSource>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Marten" />

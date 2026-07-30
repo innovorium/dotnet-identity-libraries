@@ -1,40 +1,40 @@
 # Compatibility
 
-## `0.1.0-alpha.2`: build baseline, not provider compatibility
+## Supported compatibility
 
-`0.1.0-alpha.2` is a published, nonfunctional foundation release. Its package IDs are reserved, but neither package exposes a provider API or performs persistence. The table records the dependencies against which the assemblies and repository foundation were built; it is **not** a supported application-integration or production-compatibility guarantee.
+Both packages target `net10.0` only and remain independently installable.
 
-| Component | Pinned supported range | Resolved foundation build |
+| Package | Direct dependency ranges | Supported provider surface |
 | --- | --- | --- |
-| .NET | `net10.0` only | SDK 10.0.302 / runtime 10.0.10 |
-| ASP.NET Core Identity stores | `[10.0.10, 11.0.0)` | `Microsoft.Extensions.Identity.Stores` 10.0.10 |
-| Marten | `[9.21.0, 10.0.0)` | 9.21.0 |
-| OpenIddict core | `[7.6.0, 8.0.0)` | 7.6.0 |
+| `Innovorium.AspNetCore.Identity.Marten` | Marten `[9.21.0, 10.0.0)`; `Microsoft.Extensions.Identity.Stores` `[10.0.10, 11.0.0)` | String-keyed `MartenIdentityUser` users, optional `MartenIdentityRole` roles, and the stores documented in the root README |
+| `Innovorium.OpenIddict.Marten` | Marten `[9.21.0, 10.0.0)`; Npgsql `[9.0.4, 10.0.0)`; OpenIddict.Core `[7.6.0, 8.0.0)`; Weasel.Storage `[9.17.0, 10.0.0)` | Default Marten application, authorization, scope, and token entities/stores |
 
-The ranges exclude the next major version until it has been reviewed. Preview dependencies are outside this baseline.
+The upper bounds exclude the next major version until it is reviewed. Do not
+add the other Innovorium package unless the host actually needs its provider.
+The source samples use local projects and are not NuGet adoption evidence.
 
-## Unreleased source snapshot
+The default documents, aliases, indexes, and concurrency fields are
+persisted-data contracts. This project supplies no
+migrations and does not support `AutoCreate.CreateOrUpdate` as a production
+upgrade mechanism. Generate, review, and deploy schema changes through the
+host database process; retain a tested backup and rollback plan.
 
-The `main` branch currently contains source-only provider work. It is useful
-for maintainers and evaluators, but has no versioned compatibility promise and
-is not an installation target. The sample projects reference the local source
-projects so that their APIs cannot be confused with the published `alpha.2`
-packages.
+## Release policy
 
-The default documents, aliases, indexes, and concurrency fields introduced by
-an eventual release are persisted-data contracts. Before upgrading between
-released versions, read that release's notes and apply any reviewed schema work
-through the host's database delivery process. This project does not supply or
-run migrations, and it does not support using `AutoCreate.CreateOrUpdate` as a
-production upgrade mechanism.
+The changelog records version-specific public API, persistence compatibility,
+upgrade guidance, and known limitations:
 
-## Preview policy
-
-When a functional prerelease is announced, its release notes will state the exact supported package and framework versions, public API status, persistence/document compatibility, upgrade guidance, and any known limitations. Until then:
-
-- There is no provider behavior to rely on and no migration or upgrade path to promise.
+- The project does not supply migrations or an automatic upgrade path.
 - No compatibility is implied with any ASP.NET Core Identity, OpenIddict, Marten, PostgreSQL, hosting, or deployment setup.
-- Prerelease APIs and persisted data, once introduced, may change before a stable major release.
+- While the project is below 1.0, APIs and persisted data may change in a minor release when documented in the changelog.
 - Hosts remain responsible for testing the exact released version in their own deployment topology before adopting it.
+
+## Version compatibility
+
+Patch releases preserve documented public APIs and persisted contracts except
+when a security or correctness defect makes that impossible. While the project
+is below 1.0, a minor release may introduce breaking API or persisted-contract
+changes; those changes must be called out in the changelog with explicit host
+upgrade guidance. A major release is required for breaking changes after 1.0.
 
 See [Customer experience](customer-experience.md) for consumption and responsibility boundaries.

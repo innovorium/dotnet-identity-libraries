@@ -4,6 +4,7 @@ using Marten;
 using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.ApplyJasperFxExtensions();
 var connectionString = builder.Configuration.GetConnectionString("Marten")
     ?? throw new InvalidOperationException(
         "The ConnectionStrings:Marten setting is required. The host owns its PostgreSQL credentials and lifecycle.");
@@ -75,7 +76,7 @@ app.MapPost("/users/{id}/roles/{role}", async (
         : Results.ValidationProblem(ToProblemDetails(result));
 });
 
-app.Run();
+return await app.RunJasperFxCommands(args);
 
 static Dictionary<string, string[]> ToProblemDetails(IdentityResult result) =>
     result.Errors

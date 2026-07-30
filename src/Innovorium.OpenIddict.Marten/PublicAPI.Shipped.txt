@@ -1,1 +1,105 @@
 #nullable enable
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.ApplicationId.get -> System.Guid?
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.ApplicationId.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.CreationDate.get -> System.DateTimeOffset?
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.CreationDate.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Id.get -> System.Guid
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Id.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.OpenIddictMartenAuthorization() -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Properties.get -> System.Collections.Generic.Dictionary<string!, System.Text.Json.JsonElement>!
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Properties.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Scopes.get -> string![]!
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Scopes.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Status.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Status.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Subject.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Subject.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Type.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Type.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Version.get -> int
+Innovorium.OpenIddict.Marten.OpenIddictMartenAuthorization.Version.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.ApplicationType.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.ApplicationType.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.ClientId.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.ClientId.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.ClientSecret.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.ClientSecret.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.ClientType.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.ClientType.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.ConsentType.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.ConsentType.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.DisplayName.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.DisplayName.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.DisplayNames.get -> System.Collections.Generic.Dictionary<string!, string!>!
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.DisplayNames.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Id.get -> System.Guid
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Id.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.JsonWebKeySet.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.JsonWebKeySet.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.OpenIddictMartenApplication() -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Permissions.get -> string![]!
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Permissions.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.PostLogoutRedirectUris.get -> string![]!
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.PostLogoutRedirectUris.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Properties.get -> System.Collections.Generic.Dictionary<string!, System.Text.Json.JsonElement>!
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Properties.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.RedirectUris.get -> string![]!
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.RedirectUris.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Requirements.get -> string![]!
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Requirements.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Settings.get -> System.Collections.Generic.Dictionary<string!, string!>!
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Settings.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Version.get -> int
+Innovorium.OpenIddict.Marten.OpenIddictMartenApplication.Version.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Description.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Description.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Descriptions.get -> System.Collections.Generic.Dictionary<string!, string!>!
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Descriptions.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.DisplayName.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.DisplayName.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.DisplayNames.get -> System.Collections.Generic.Dictionary<string!, string!>!
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.DisplayNames.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Id.get -> System.Guid
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Id.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Name.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Name.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.OpenIddictMartenScope() -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Properties.get -> System.Collections.Generic.Dictionary<string!, System.Text.Json.JsonElement>!
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Properties.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Resources.get -> string![]!
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Resources.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Version.get -> int
+Innovorium.OpenIddict.Marten.OpenIddictMartenScope.Version.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.ApplicationId.get -> System.Guid?
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.ApplicationId.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.AuthorizationId.get -> System.Guid?
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.AuthorizationId.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.CreationDate.get -> System.DateTimeOffset?
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.CreationDate.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.ExpirationDate.get -> System.DateTimeOffset?
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.ExpirationDate.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Id.get -> System.Guid
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Id.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.OpenIddictMartenToken() -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Payload.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Payload.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Properties.get -> System.Collections.Generic.Dictionary<string!, System.Text.Json.JsonElement>!
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Properties.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.RedemptionDate.get -> System.DateTimeOffset?
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.RedemptionDate.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.ReferenceId.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.ReferenceId.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Status.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Status.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Subject.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Subject.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Type.get -> string?
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Type.set -> void
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Version.get -> int
+Innovorium.OpenIddict.Marten.OpenIddictMartenToken.Version.set -> void
+Microsoft.Extensions.DependencyInjection.OpenIddictMartenExtensions
+static Microsoft.Extensions.DependencyInjection.OpenIddictMartenExtensions.UseMarten(this Microsoft.Extensions.DependencyInjection.OpenIddictCoreBuilder! builder) -> Microsoft.Extensions.DependencyInjection.OpenIddictCoreBuilder!

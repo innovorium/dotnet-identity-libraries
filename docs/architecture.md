@@ -1,9 +1,8 @@
 # Architecture
 
-This document records the provider contract being developed on `main`. The
-published `0.1.0-alpha.2` packages do not implement it; see the README for the
-current release boundary. Source implementation is not a released compatibility
-promise.
+This document records the current provider contract. While the project is below
+1.0, public and persisted contracts may change in a minor release;
+version-specific changes belong in the [changelog](../CHANGELOG.md).
 
 ## Purpose
 
@@ -14,8 +13,7 @@ This repository is intended to provide independent Marten persistence integratio
 ### Innovorium.AspNetCore.Identity.Marten
 
 Owns ASP.NET Core Identity store implementations, default document models,
-Marten schema configuration, and dependency-injection registration in the
-unreleased source.
+Marten schema configuration, and dependency-injection registration.
 
 It does not own application profiles, organization memberships, authorization policy, connection strings, database lifecycle, or schema deployment.
 
@@ -23,7 +21,7 @@ It does not own application profiles, organization memberships, authorization po
 
 Owns OpenIddict application, authorization, scope, and token stores; their
 default document models; Marten schema configuration; and dependency-injection
-registration in the unreleased source.
+registration.
 
 It does not own server endpoints, consent user experience, signing credentials, issuer selection, or application-domain users.
 

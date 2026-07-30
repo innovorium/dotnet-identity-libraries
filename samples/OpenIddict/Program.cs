@@ -6,6 +6,7 @@ using OpenIddict.Abstractions;
 using OpenIddict.Core;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.ApplyJasperFxExtensions();
 var connectionString = builder.Configuration.GetConnectionString("Marten")
     ?? throw new InvalidOperationException(
         "The ConnectionStrings:Marten setting is required. The host owns its PostgreSQL credentials and lifecycle.");
@@ -52,7 +53,7 @@ app.MapPost("/applications", async (
         : Results.Created($"/applications/{request.ClientId}", new { request.ClientId, request.DisplayName });
 });
 
-app.Run();
+return await app.RunJasperFxCommands(args);
 
 internal sealed record CreateApplicationRequest(
     string ClientId,

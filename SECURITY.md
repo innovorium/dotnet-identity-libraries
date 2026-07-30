@@ -2,9 +2,13 @@
 
 ## Supported versions
 
-`0.1.0-alpha.2` is a nonfunctional foundation release, not a supported provider release. It has no public persistence or registration API and must not be used in an application or production environment.
+The latest functional release accepts security reports for its documented
+persistence and registration behavior. Package-reservation releases that do
+not contain provider APIs are unsupported for application use.
 
-Until a supported release is announced, Innovorium accepts good-faith reports about repository, package, build, or release-security defects but makes no response-time, fix-time, backport, or compatibility commitment. A future stable release will state its supported versions and security-maintenance policy in its release notes and this file.
+Innovorium accepts good-faith reports about provider, repository, package,
+build, or release-security defects but makes no response-time, fix-time,
+backport, or compatibility commitment while the project is below 1.0.
 
 ## Reporting a vulnerability
 

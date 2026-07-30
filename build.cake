@@ -13,6 +13,11 @@ var packageIds = new[]
     "Innovorium.AspNetCore.Identity.Marten",
     "Innovorium.OpenIddict.Marten"
 };
+var expectedReadmeMarkers = new Dictionary<string, string>
+{
+    ["Innovorium.AspNetCore.Identity.Marten"] = "AddMartenStores()",
+    ["Innovorium.OpenIddict.Marten"] = "UseMarten()"
+};
 var expectedPackageDependencies = new Dictionary<string, Dictionary<string, string>>
 {
     ["Innovorium.AspNetCore.Identity.Marten"] = new()
@@ -244,7 +249,14 @@ Task("Inspect-Packages")
             Unzip(package, packageContents);
             Unzip(symbols, symbolContents);
 
-            RequireFile(packageContents.CombineWithFilePath("README.md"));
+            var readme = packageContents.CombineWithFilePath("README.md");
+            RequireFile(readme);
+            var readmeText = System.IO.File.ReadAllText(readme.FullPath);
+            if (!readmeText.Contains(packageId, StringComparison.Ordinal) ||
+                !readmeText.Contains(expectedReadmeMarkers[packageId], StringComparison.Ordinal))
+            {
+                throw new CakeException($"{packageId} must contain its package-specific README.");
+            }
             var nuspec = packageContents.CombineWithFilePath($"{packageId}.nuspec");
             RequireFile(nuspec);
             RequireFile(packageContents.CombineWithFilePath($"lib/net10.0/{packageId}.dll"));
@@ -439,6 +451,7 @@ Task("Checksums")
         });
 
         System.IO.File.WriteAllLines(packageDirectory.CombineWithFilePath("SHA256SUMS").FullPath, lines);
+
     });
 
 Task("Security")
@@ -497,6 +510,7 @@ Task("Release")
             {
                 throw new CakeException($"Git tag '{tag}' does not match MinVer package version '{version}'.");
             }
+
         }
     });
 
