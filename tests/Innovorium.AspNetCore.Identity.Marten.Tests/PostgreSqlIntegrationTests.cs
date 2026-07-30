@@ -566,6 +566,152 @@ public sealed class PostgreSqlIntegrationTests
         Assert.Empty(await verification.GetPasskeysAsync(loser));
     }
 
+    [Fact(
+        Skip = "Set INNOVORIUM_TEST_POSTGRES to run the disposable PostgreSQL integration test.",
+        SkipUnless = nameof(HasPostgreSql))]
+    public async Task ConcurrentExternalLoginAssociationHasExactlyOneOwnerAndStandardLoserFailure()
+    {
+        await using var provider = await CreateRoleEnabledProviderAsync();
+        var suffix = Guid.NewGuid().ToString("N");
+        var firstUserId = $"login-race-first-{suffix}";
+        var secondUserId = $"login-race-second-{suffix}";
+        var providerKey = $"same-login-{suffix}";
+
+        await using (var setupScope = provider.CreateAsyncScope())
+        {
+            var users = setupScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            AssertSucceeded(await users.CreateAsync(new ApplicationUser
+            {
+                Id = firstUserId,
+                UserName = $"login-race-first-{suffix}",
+                Email = $"login-race-first-{suffix}@example.test",
+            }));
+            AssertSucceeded(await users.CreateAsync(new ApplicationUser
+            {
+                Id = secondUserId,
+                UserName = $"login-race-second-{suffix}",
+                Email = $"login-race-second-{suffix}@example.test",
+            }));
+        }
+
+        await using var firstScope = provider.CreateAsyncScope();
+        await using var secondScope = provider.CreateAsyncScope();
+        var managers = new[]
+        {
+            firstScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>(),
+            secondScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>(),
+        };
+        var usersByIndex = new[]
+        {
+            Assert.IsType<ApplicationUser>(await managers[0].FindByIdAsync(firstUserId)),
+            Assert.IsType<ApplicationUser>(await managers[1].FindByIdAsync(secondUserId)),
+        };
+        var logins = new[]
+        {
+            new UserLoginInfo("github", providerKey, "First GitHub"),
+            new UserLoginInfo("github", providerKey, "Second GitHub"),
+        };
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = Enumerable.Range(0, 2)
+            .Select(async index =>
+            {
+                await gate.Task;
+                return await managers[index].AddLoginAsync(usersByIndex[index], logins[index]);
+            })
+            .ToArray();
+        gate.SetResult();
+        var results = await Task.WhenAll(attempts);
+
+        var winnerIndex = Assert.Single(Enumerable.Range(0, 2), index => results[index].Succeeded);
+        var loserIndex = Assert.Single(Enumerable.Range(0, 2), index => !results[index].Succeeded);
+        Assert.Equal("LoginAlreadyAssociated", Assert.Single(results[loserIndex].Errors).Code);
+
+        var reloadedLoser = Assert.IsType<ApplicationUser>(
+            await managers[loserIndex].FindByIdAsync(usersByIndex[loserIndex].Id));
+        AssertSucceeded(await managers[loserIndex].SetPhoneNumberAsync(reloadedLoser, "+15550000006"));
+
+        await using var verificationScope = provider.CreateAsyncScope();
+        var verification = verificationScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var owner = Assert.IsType<ApplicationUser>(await verification.FindByLoginAsync("github", providerKey));
+        Assert.Equal(usersByIndex[winnerIndex].Id, owner.Id);
+        Assert.Contains(
+            await verification.GetLoginsAsync(owner),
+            login => login.ProviderKey == providerKey &&
+                     login.ProviderDisplayName == logins[winnerIndex].ProviderDisplayName);
+        var loser = Assert.IsType<ApplicationUser>(
+            await verification.FindByIdAsync(usersByIndex[loserIndex].Id));
+        Assert.Empty(await verification.GetLoginsAsync(loser));
+        Assert.Equal("+15550000006", loser.PhoneNumber);
+    }
+
+    [Fact(
+        Skip = "Set INNOVORIUM_TEST_POSTGRES to run the disposable PostgreSQL integration test.",
+        SkipUnless = nameof(HasPostgreSql))]
+    public async Task ConcurrentRoleMembershipHasOneEffectiveMembershipAndStandardLoserFailure()
+    {
+        await using var provider = await CreateRoleEnabledProviderAsync();
+        var suffix = Guid.NewGuid().ToString("N");
+        var userId = $"membership-race-user-{suffix}";
+        var roleId = $"membership-race-role-{suffix}";
+        var roleName = $"MembershipRace-{suffix}";
+
+        await using (var setupScope = provider.CreateAsyncScope())
+        {
+            var users = setupScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var roles = setupScope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+            AssertSucceeded(await users.CreateAsync(new ApplicationUser
+            {
+                Id = userId,
+                UserName = $"membership-race-{suffix}",
+                Email = $"membership-race-{suffix}@example.test",
+            }));
+            AssertSucceeded(await roles.CreateAsync(new ApplicationRole { Id = roleId, Name = roleName }));
+        }
+
+        await using var firstScope = provider.CreateAsyncScope();
+        await using var secondScope = provider.CreateAsyncScope();
+        var managers = new[]
+        {
+            firstScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>(),
+            secondScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>(),
+        };
+        var usersByIndex = new[]
+        {
+            Assert.IsType<ApplicationUser>(await managers[0].FindByIdAsync(userId)),
+            Assert.IsType<ApplicationUser>(await managers[1].FindByIdAsync(userId)),
+        };
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = Enumerable.Range(0, 2)
+            .Select(async index =>
+            {
+                await gate.Task;
+                return await managers[index].AddToRoleAsync(usersByIndex[index], roleName);
+            })
+            .ToArray();
+        gate.SetResult();
+        var results = await Task.WhenAll(attempts);
+
+        Assert.Single(results, result => result.Succeeded);
+        var loser = Assert.Single(results, result => !result.Succeeded);
+        Assert.True(
+            Assert.Single(loser.Errors).Code is "UserAlreadyInRole" or "ConcurrencyFailure");
+
+        var documentStore = provider.GetRequiredService<IDocumentStore>();
+        await using (var query = documentStore.QuerySession())
+        {
+            var memberships = await query.Query<MartenIdentityUserRole>()
+                .Where(document => document.UserId == userId && document.RoleId == roleId)
+                .ToListAsync(TestContext.Current.CancellationToken);
+            Assert.Single(memberships);
+        }
+
+        await using var verificationScope = provider.CreateAsyncScope();
+        var verification = verificationScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var persisted = Assert.IsType<ApplicationUser>(await verification.FindByIdAsync(userId));
+        Assert.True(await verification.IsInRoleAsync(persisted, roleName));
+        Assert.Single(await verification.GetRolesAsync(persisted), role => role == roleName);
+    }
+
     private static async Task<ServiceProvider> CreateRoleEnabledProviderAsync()
     {
         var services = new ServiceCollection();

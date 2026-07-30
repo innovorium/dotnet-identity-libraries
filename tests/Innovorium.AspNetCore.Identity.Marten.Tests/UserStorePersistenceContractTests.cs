@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using JasperFx;
 using Marten;
 using Marten.Exceptions;
 using Microsoft.AspNetCore.Identity;
@@ -183,6 +184,84 @@ public sealed class UserStorePersistenceContractTests
         Assert.Equal("DuplicatePasskey", Assert.Single(result.Errors).Code);
         Assert.Contains("Insert", fixture.Session.Calls);
         Assert.Contains("SaveChangesAsync", fixture.Session.Calls);
+        Assert.Equal(2, DocumentStoreSessionOpenCount(fixture));
+    }
+
+    [Fact]
+    public async Task ConcurrentLoginInsertReturnsStandardFailureAndResetsTheSession()
+    {
+        using var fixture = new StoreFixture();
+        fixture.Session.ResultFactory = method =>
+            method.Name == nameof(IDocumentSession.SaveChangesAsync)
+                ? throw new DocumentAlreadyExistsException(
+                    typeof(MartenIdentityUserLogin<ApplicationUser>),
+                    "login-id")
+                : RecordingProxy.DefaultResult(method);
+        using var store = fixture.CreateStore();
+        var user = new ApplicationUser { Id = "login-race-user" };
+
+        await store.AddLoginAsync(
+            user,
+            new UserLoginInfo("github", "same-key", "GitHub"),
+            TestContext.Current.CancellationToken);
+        var result = await store.UpdateAsync(user, TestContext.Current.CancellationToken);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("LoginAlreadyAssociated", Assert.Single(result.Errors).Code);
+        Assert.Contains("Insert", fixture.Session.Calls);
+        Assert.Contains("SaveChangesAsync", fixture.Session.Calls);
+        Assert.Equal(2, DocumentStoreSessionOpenCount(fixture));
+    }
+
+    [Fact]
+    public async Task ConcurrentMembershipInsertReturnsStandardFailureAndResetsTheSession()
+    {
+        using var fixture = new StoreFixture();
+        fixture.Session.ResultFactory = method =>
+            method.Name == nameof(IDocumentSession.SaveChangesAsync)
+                ? throw new DocumentAlreadyExistsException(typeof(MartenIdentityUserRole), "membership-id")
+                : RecordingProxy.DefaultResult(method);
+        using var store = fixture.CreateStore();
+        var user = new ApplicationUser { Id = "membership-race-user" };
+        store.BeginPendingChanges(user, MartenIdentityPendingChangeKind.AddRole);
+        store.AddPendingChange(session => session.Insert(new MartenIdentityUserRole
+        {
+            Id = "membership-id",
+            UserId = user.Id,
+            RoleId = "admin-role",
+        }));
+        store.RegisterDocumentAlreadyExistsFailure(
+            typeof(MartenIdentityUserRole),
+            store.UserAlreadyInRoleError("Admin"));
+
+        var result = await store.UpdateAsync(user, TestContext.Current.CancellationToken);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("UserAlreadyInRole", Assert.Single(result.Errors).Code);
+        Assert.Contains("Insert", fixture.Session.Calls);
+        Assert.Contains("SaveChangesAsync", fixture.Session.Calls);
+        Assert.Equal(2, DocumentStoreSessionOpenCount(fixture));
+    }
+
+    [Fact]
+    public async Task UnknownDocumentAlreadyExistsFailureIsNotMisclassified()
+    {
+        using var fixture = new StoreFixture();
+        fixture.Session.ResultFactory = method =>
+            method.Name == nameof(IDocumentSession.SaveChangesAsync)
+                ? throw new DocumentAlreadyExistsException(typeof(ApplicationUser), "user-id")
+                : RecordingProxy.DefaultResult(method);
+        using var store = fixture.CreateStore();
+        var user = new ApplicationUser { Id = "unknown-race-user" };
+        await store.AddLoginAsync(
+            user,
+            new UserLoginInfo("github", "unknown-key", "GitHub"),
+            TestContext.Current.CancellationToken);
+
+        var exception = await Assert.ThrowsAsync<DocumentAlreadyExistsException>(() =>
+            store.UpdateAsync(user, TestContext.Current.CancellationToken));
+
+        Assert.Equal(typeof(ApplicationUser), exception.DocumentType);
         Assert.Equal(2, DocumentStoreSessionOpenCount(fixture));
     }
 

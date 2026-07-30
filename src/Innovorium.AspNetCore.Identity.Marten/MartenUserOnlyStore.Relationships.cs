@@ -164,6 +164,9 @@ public partial class MartenUserOnlyStore<TUser> :
         };
         BeginPendingChanges(user);
         AddPendingChange(session => session.Insert(document));
+        RegisterDocumentAlreadyExistsFailure(
+            typeof(MartenIdentityUserLogin<TUser>),
+            LoginAlreadyAssociatedError());
         return Task.CompletedTask;
     }
 
@@ -380,6 +383,12 @@ public partial class MartenUserOnlyStore<TUser> :
                 session.Store(document);
             }
         });
+        if (isNew)
+        {
+            RegisterDocumentAlreadyExistsFailure(
+                typeof(MartenIdentityUserPasskey<TUser>),
+                MartenIdentityErrors.DuplicatePasskey());
+        }
     }
 
     /// <inheritdoc />

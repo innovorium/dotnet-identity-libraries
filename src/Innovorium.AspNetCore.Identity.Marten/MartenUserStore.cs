@@ -48,6 +48,9 @@ public sealed class MartenUserStore<TUser, TRole> :
         };
         BeginPendingChanges(user, MartenIdentityPendingChangeKind.AddRole);
         AddPendingChange(session => session.Insert(membership));
+        RegisterDocumentAlreadyExistsFailure(
+            typeof(MartenIdentityUserRole),
+            UserAlreadyInRoleError(roleName));
     }
 
     /// <inheritdoc />

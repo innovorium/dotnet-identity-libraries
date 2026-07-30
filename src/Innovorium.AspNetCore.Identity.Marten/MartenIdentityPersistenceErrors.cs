@@ -16,9 +16,11 @@ internal static class MartenIdentityPersistenceErrors
     public static string? FindForeignKeyConstraint(Exception exception)
         => FindPostgreSqlConstraint(exception, "23503");
 
-    public static bool IsDocumentAlreadyExistsFor(Exception exception, Type documentType) =>
-        Traverse(exception).Any(current =>
-            current is DocumentAlreadyExistsException duplicate && duplicate.DocumentType == documentType);
+    public static Type? FindDocumentAlreadyExistsType(Exception exception) =>
+        Traverse(exception)
+            .OfType<DocumentAlreadyExistsException>()
+            .Select(duplicate => duplicate.DocumentType)
+            .FirstOrDefault();
 
     private static string? FindPostgreSqlConstraint(Exception exception, string expectedSqlState)
     {

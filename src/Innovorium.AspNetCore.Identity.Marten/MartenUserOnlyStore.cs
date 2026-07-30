@@ -523,12 +523,12 @@ public partial class MartenUserOnlyStore<TUser> :
             };
         }
         catch (Exception exception) when (
-            MartenIdentityPersistenceErrors.IsDocumentAlreadyExistsFor(
-                exception,
-                typeof(MartenIdentityUserPasskey<TUser>)))
+            MartenIdentityPersistenceErrors.FindDocumentAlreadyExistsType(exception) is { } documentType &&
+            _pendingChanges.HasDocumentAlreadyExistsFailure(documentType))
         {
+            var failure = _pendingChanges.GetDocumentAlreadyExistsFailure(documentType);
             ResetSession();
-            return IdentityResult.Failed(MartenIdentityErrors.DuplicatePasskey());
+            return IdentityResult.Failed(failure);
         }
         catch (Exception exception) when (
             MartenIdentityPersistenceErrors.FindUniqueConstraint(exception) ==
@@ -574,6 +574,9 @@ public partial class MartenUserOnlyStore<TUser> :
 
     internal void AddPendingChange(Action<IDocumentSession> operation) => _pendingChanges.Add(operation);
 
+    internal void RegisterDocumentAlreadyExistsFailure(Type documentType, IdentityError failure) =>
+        _pendingChanges.RegisterDocumentAlreadyExistsFailure(documentType, failure);
+
     internal void RejectPendingChanges(TUser user, IdentityError failure) =>
         _pendingChanges.Reject(user, failure);
 
@@ -581,6 +584,10 @@ public partial class MartenUserOnlyStore<TUser> :
         _pendingChanges.IsFor(user, kind);
 
     internal void DiscardPendingChanges() => _pendingChanges.Clear();
+
+    internal IdentityError LoginAlreadyAssociatedError() => _errorDescriber.LoginAlreadyAssociated();
+
+    internal IdentityError UserAlreadyInRoleError(string roleName) => _errorDescriber.UserAlreadyInRole(roleName);
 
     internal void ThrowIfStoreDisposed() => ThrowIfDisposed();
 }

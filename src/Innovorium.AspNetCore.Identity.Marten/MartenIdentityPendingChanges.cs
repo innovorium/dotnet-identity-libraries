@@ -16,6 +16,7 @@ internal sealed class MartenIdentityPendingChanges<TDocument>
 {
     private static readonly ConditionalWeakTable<TDocument, MartenIdentityPendingChanges<TDocument>> Owners = new();
 
+    private readonly Dictionary<Type, IdentityError> _documentAlreadyExistsFailures = [];
     private readonly List<Action<IDocumentSession>> _operations = [];
     private TDocument? _document;
     private IdentityError? _failure;
@@ -45,6 +46,19 @@ internal sealed class MartenIdentityPendingChanges<TDocument>
         ArgumentNullException.ThrowIfNull(operation);
         _operations.Add(operation);
     }
+
+    public void RegisterDocumentAlreadyExistsFailure(Type documentType, IdentityError failure)
+    {
+        ArgumentNullException.ThrowIfNull(documentType);
+        ArgumentNullException.ThrowIfNull(failure);
+        _documentAlreadyExistsFailures[documentType] = failure;
+    }
+
+    public bool HasDocumentAlreadyExistsFailure(Type documentType) =>
+        _documentAlreadyExistsFailures.ContainsKey(documentType);
+
+    public IdentityError GetDocumentAlreadyExistsFailure(Type documentType) =>
+        _documentAlreadyExistsFailures[documentType];
 
     public void Reject(TDocument document, IdentityError failure)
     {
@@ -91,6 +105,7 @@ internal sealed class MartenIdentityPendingChanges<TDocument>
         }
 
         _operations.Clear();
+        _documentAlreadyExistsFailures.Clear();
         _document = null;
         _failure = null;
         _validationObserved = false;
