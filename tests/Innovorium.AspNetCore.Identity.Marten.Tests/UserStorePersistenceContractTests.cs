@@ -119,6 +119,73 @@ public sealed class UserStorePersistenceContractTests
         Assert.Equal(2, DocumentStoreSessionOpenCount(fixture));
     }
 
+    [Fact]
+    public async Task PasskeyOwnedByAnotherUserReturnsStableFailureWithoutMutationOrBufferLeak()
+    {
+        using var fixture = new StoreFixture();
+        var credentialId = new byte[] { 1, 2, 3, 4 };
+        var original = new MartenIdentityUserPasskey<ApplicationUser>
+        {
+            Id = MartenIdentityDocumentId.UserPasskey(credentialId),
+            UserId = "owner",
+        };
+        original.Update(CreatePasskey(credentialId, "Owner key", [5, 6, 7]));
+        fixture.Session.ResultFactory = method =>
+            method.Name == nameof(IQuerySession.LoadAsync)
+                ? Task.FromResult<MartenIdentityUserPasskey<ApplicationUser>?>(original)
+                : RecordingProxy.DefaultResult(method);
+        using var store = fixture.CreateStore();
+        var intruder = new ApplicationUser { Id = "second-user" };
+
+        await store.AddOrUpdatePasskeyAsync(
+            intruder,
+            CreatePasskey(credentialId, "Replacement", [9, 9, 9]),
+            TestContext.Current.CancellationToken);
+        var rejected = await store.UpdateAsync(intruder, TestContext.Current.CancellationToken);
+
+        Assert.False(rejected.Succeeded);
+        Assert.Equal("DuplicatePasskey", Assert.Single(rejected.Errors).Code);
+        Assert.Equal("owner", original.UserId);
+        Assert.Equal("Owner key", original.Name);
+        Assert.Equal([5, 6, 7], original.PublicKey);
+        Assert.DoesNotContain("Store", fixture.Session.Calls);
+        Assert.DoesNotContain("Update", fixture.Session.Calls);
+        Assert.DoesNotContain("SaveChangesAsync", fixture.Session.Calls);
+
+        fixture.Session.Calls.Clear();
+        intruder.PhoneNumber = "+15550000003";
+        var laterUpdate = await store.UpdateAsync(intruder, TestContext.Current.CancellationToken);
+        Assert.True(laterUpdate.Succeeded);
+        Assert.Contains("Update", fixture.Session.Calls);
+        Assert.Contains("SaveChangesAsync", fixture.Session.Calls);
+        Assert.DoesNotContain("Store", fixture.Session.Calls);
+    }
+
+    [Fact]
+    public async Task ConcurrentPasskeyInsertReturnsStableFailureAndResetsTheSession()
+    {
+        using var fixture = new StoreFixture();
+        fixture.Session.ResultFactory = method =>
+            method.Name == nameof(IDocumentSession.SaveChangesAsync)
+                ? throw new AggregateException(
+                    CreateUniqueViolation(MartenIdentitySchema.UserPasskeyPrimaryKey))
+                : RecordingProxy.DefaultResult(method);
+        using var store = fixture.CreateStore();
+        var user = new ApplicationUser { Id = "race-user" };
+
+        await store.AddOrUpdatePasskeyAsync(
+            user,
+            CreatePasskey([1, 3, 3, 7], "Racing key", [2, 4, 6]),
+            TestContext.Current.CancellationToken);
+        var result = await store.UpdateAsync(user, TestContext.Current.CancellationToken);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("DuplicatePasskey", Assert.Single(result.Errors).Code);
+        Assert.Contains("Insert", fixture.Session.Calls);
+        Assert.Contains("SaveChangesAsync", fixture.Session.Calls);
+        Assert.Equal(2, DocumentStoreSessionOpenCount(fixture));
+    }
+
     private static int DocumentStoreSessionOpenCount(StoreFixture fixture) =>
         fixture.DocumentStore.Calls.Count(call => call == nameof(IDocumentStore.LightweightSession));
 
@@ -142,6 +209,22 @@ public sealed class UserStorePersistenceContractTests
             file: string.Empty,
             line: string.Empty,
             routine: string.Empty);
+
+    private static UserPasskeyInfo CreatePasskey(byte[] credentialId, string name, byte[] publicKey) =>
+        new(
+            credentialId,
+            publicKey,
+            DateTimeOffset.UtcNow,
+            3,
+            ["internal"],
+            isUserVerified: true,
+            isBackupEligible: false,
+            isBackedUp: false,
+            [8],
+            [9])
+        {
+            Name = name,
+        };
 
     private sealed class StoreFixture : IDisposable
     {

@@ -445,6 +445,127 @@ public sealed class PostgreSqlIntegrationTests
         Assert.False(await verification.IsInRoleAsync(persisted, roleName));
     }
 
+    [Fact(
+        Skip = "Set INNOVORIUM_TEST_POSTGRES to run the disposable PostgreSQL integration test.",
+        SkipUnless = nameof(HasPostgreSql))]
+    public async Task PasskeyCredentialCannotBeTakenFromAnotherUserOrLeakPendingState()
+    {
+        await using var provider = await CreateRoleEnabledProviderAsync();
+        var suffix = Guid.NewGuid().ToString("N");
+        var ownerId = $"passkey-owner-{suffix}";
+        var secondUserId = $"passkey-second-{suffix}";
+        var credentialId = Guid.NewGuid().ToByteArray();
+        var original = CreatePasskey(credentialId, "Owner key", [1, 3, 5, 7]);
+        var replacement = CreatePasskey(credentialId, "Replacement", [2, 4, 6, 8]);
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var owner = new ApplicationUser
+            {
+                Id = ownerId,
+                UserName = $"passkey-owner-{suffix}",
+                Email = $"passkey-owner-{suffix}@example.test",
+            };
+            var secondUser = new ApplicationUser
+            {
+                Id = secondUserId,
+                UserName = $"passkey-second-{suffix}",
+                Email = $"passkey-second-{suffix}@example.test",
+            };
+            AssertSucceeded(await users.CreateAsync(owner));
+            AssertSucceeded(await users.CreateAsync(secondUser));
+            AssertSucceeded(await users.AddOrUpdatePasskeyAsync(owner, original));
+
+            var rejected = await users.AddOrUpdatePasskeyAsync(secondUser, replacement);
+            Assert.False(rejected.Succeeded);
+            Assert.Equal("DuplicatePasskey", Assert.Single(rejected.Errors).Code);
+
+            AssertSucceeded(await users.SetPhoneNumberAsync(secondUser, "+15550000004"));
+        }
+
+        await using var verificationScope = provider.CreateAsyncScope();
+        var verification = verificationScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var ownerUser = Assert.IsType<ApplicationUser>(await verification.FindByIdAsync(ownerId));
+        var secondUserVerification = Assert.IsType<ApplicationUser>(
+            await verification.FindByIdAsync(secondUserId));
+        var persisted = Assert.Single(await verification.GetPasskeysAsync(ownerUser));
+        Assert.Equal("Owner key", persisted.Name);
+        Assert.Equal(original.PublicKey, persisted.PublicKey);
+        Assert.Equal(original.SignCount, persisted.SignCount);
+        Assert.Equal(ownerId, (await verification.FindByPasskeyIdAsync(credentialId))?.Id);
+        Assert.Null(await verification.GetPasskeyAsync(secondUserVerification, credentialId));
+        Assert.Empty(await verification.GetPasskeysAsync(secondUserVerification));
+        Assert.Equal("+15550000004", secondUserVerification.PhoneNumber);
+    }
+
+    [Fact(
+        Skip = "Set INNOVORIUM_TEST_POSTGRES to run the disposable PostgreSQL integration test.",
+        SkipUnless = nameof(HasPostgreSql))]
+    public async Task ConcurrentPasskeyRegistrationHasExactlyOneOwnerWithoutOverwrite()
+    {
+        await using var provider = await CreateRoleEnabledProviderAsync();
+        var suffix = Guid.NewGuid().ToString("N");
+        var firstUserId = $"passkey-race-first-{suffix}";
+        var secondUserId = $"passkey-race-second-{suffix}";
+        var credentialId = Guid.NewGuid().ToByteArray();
+        var firstPasskey = CreatePasskey(credentialId, "First key", [1, 1, 1, 1]);
+        var secondPasskey = CreatePasskey(credentialId, "Second key", [2, 2, 2, 2]);
+
+        await using (var setupScope = provider.CreateAsyncScope())
+        {
+            var users = setupScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            AssertSucceeded(await users.CreateAsync(new ApplicationUser
+            {
+                Id = firstUserId,
+                UserName = $"passkey-race-first-{suffix}",
+                Email = $"passkey-race-first-{suffix}@example.test",
+            }));
+            AssertSucceeded(await users.CreateAsync(new ApplicationUser
+            {
+                Id = secondUserId,
+                UserName = $"passkey-race-second-{suffix}",
+                Email = $"passkey-race-second-{suffix}@example.test",
+            }));
+        }
+
+        await using var firstScope = provider.CreateAsyncScope();
+        await using var secondScope = provider.CreateAsyncScope();
+        var firstStore = firstScope.ServiceProvider.GetRequiredService<IUserStore<ApplicationUser>>();
+        var secondStore = secondScope.ServiceProvider.GetRequiredService<IUserStore<ApplicationUser>>();
+        var firstUser = Assert.IsType<ApplicationUser>(await firstStore.FindByIdAsync(
+            firstUserId,
+            TestContext.Current.CancellationToken));
+        var secondUser = Assert.IsType<ApplicationUser>(await secondStore.FindByIdAsync(
+            secondUserId,
+            TestContext.Current.CancellationToken));
+        await Assert.IsAssignableFrom<IUserPasskeyStore<ApplicationUser>>(firstStore)
+            .AddOrUpdatePasskeyAsync(firstUser, firstPasskey, TestContext.Current.CancellationToken);
+        await Assert.IsAssignableFrom<IUserPasskeyStore<ApplicationUser>>(secondStore)
+            .AddOrUpdatePasskeyAsync(secondUser, secondPasskey, TestContext.Current.CancellationToken);
+
+        var results = await Task.WhenAll(
+            firstStore.UpdateAsync(firstUser, TestContext.Current.CancellationToken),
+            secondStore.UpdateAsync(secondUser, TestContext.Current.CancellationToken));
+        var winnerIndex = Assert.Single(Enumerable.Range(0, 2), index => results[index].Succeeded);
+        var loserIndex = Assert.Single(Enumerable.Range(0, 2), index => !results[index].Succeeded);
+        Assert.Equal("DuplicatePasskey", Assert.Single(results[loserIndex].Errors).Code);
+
+        var expectedOwnerId = winnerIndex == 0 ? firstUserId : secondUserId;
+        var expectedPasskey = winnerIndex == 0 ? firstPasskey : secondPasskey;
+        await using var verificationScope = provider.CreateAsyncScope();
+        var verification = verificationScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var resolvedOwner = Assert.IsType<ApplicationUser>(
+            await verification.FindByPasskeyIdAsync(credentialId));
+        Assert.Equal(expectedOwnerId, resolvedOwner.Id);
+        var persisted = Assert.Single(await verification.GetPasskeysAsync(resolvedOwner));
+        Assert.Equal(expectedPasskey.Name, persisted.Name);
+        Assert.Equal(expectedPasskey.PublicKey, persisted.PublicKey);
+        var loser = Assert.IsType<ApplicationUser>(await verification.FindByIdAsync(
+            loserIndex == 0 ? firstUserId : secondUserId));
+        Assert.Empty(await verification.GetPasskeysAsync(loser));
+    }
+
     private static async Task<ServiceProvider> CreateRoleEnabledProviderAsync()
     {
         var services = new ServiceCollection();
@@ -491,10 +612,10 @@ public sealed class PostgreSqlIntegrationTests
             ;
     }
 
-    private static UserPasskeyInfo CreatePasskey(byte[] credentialId, string name) =>
+    private static UserPasskeyInfo CreatePasskey(byte[] credentialId, string name, byte[]? publicKey = null) =>
         new(
             credentialId,
-            [1, 2, 3, 4],
+            publicKey ?? [1, 2, 3, 4],
             DateTimeOffset.UtcNow,
             7,
             ["internal", "hybrid"],

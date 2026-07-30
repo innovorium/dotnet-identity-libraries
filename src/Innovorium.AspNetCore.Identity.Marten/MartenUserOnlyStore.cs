@@ -102,6 +102,11 @@ public partial class MartenUserOnlyStore<TUser> :
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (_pendingChanges.TryTakeFailure(user, out var pendingFailure))
+        {
+            return IdentityResult.Failed(pendingFailure!);
+        }
+
         try
         {
             _pendingChanges.Materialize(_session, user);
@@ -518,6 +523,21 @@ public partial class MartenUserOnlyStore<TUser> :
             };
         }
         catch (Exception exception) when (
+            MartenIdentityPersistenceErrors.IsDocumentAlreadyExistsFor(
+                exception,
+                typeof(MartenIdentityUserPasskey<TUser>)))
+        {
+            ResetSession();
+            return IdentityResult.Failed(MartenIdentityErrors.DuplicatePasskey());
+        }
+        catch (Exception exception) when (
+            MartenIdentityPersistenceErrors.FindUniqueConstraint(exception) ==
+            MartenIdentitySchema.UserPasskeyPrimaryKey)
+        {
+            ResetSession();
+            return IdentityResult.Failed(MartenIdentityErrors.DuplicatePasskey());
+        }
+        catch (Exception exception) when (
             MartenIdentityPersistenceErrors.FindForeignKeyConstraint(exception) ==
             MartenIdentitySchema.UserRoleRoleForeignKey)
         {
@@ -553,6 +573,9 @@ public partial class MartenUserOnlyStore<TUser> :
         _pendingChanges.Begin(user, kind);
 
     internal void AddPendingChange(Action<IDocumentSession> operation) => _pendingChanges.Add(operation);
+
+    internal void RejectPendingChanges(TUser user, IdentityError failure) =>
+        _pendingChanges.Reject(user, failure);
 
     internal bool HasPendingChanges(TUser user, MartenIdentityPendingChangeKind kind) =>
         _pendingChanges.IsFor(user, kind);

@@ -1,3 +1,6 @@
+using JasperFx;
+using Microsoft.AspNetCore.Identity;
+
 namespace Innovorium.AspNetCore.Identity.Marten;
 
 internal static class MartenIdentityPersistenceErrors
@@ -12,6 +15,10 @@ internal static class MartenIdentityPersistenceErrors
 
     public static string? FindForeignKeyConstraint(Exception exception)
         => FindPostgreSqlConstraint(exception, "23503");
+
+    public static bool IsDocumentAlreadyExistsFor(Exception exception, Type documentType) =>
+        Traverse(exception).Any(current =>
+            current is DocumentAlreadyExistsException duplicate && duplicate.DocumentType == documentType);
 
     private static string? FindPostgreSqlConstraint(Exception exception, string expectedSqlState)
     {
@@ -56,4 +63,13 @@ internal static class MartenIdentityPersistenceErrors
             }
         }
     }
+}
+
+internal static class MartenIdentityErrors
+{
+    public static IdentityError DuplicatePasskey() => new()
+    {
+        Code = "DuplicatePasskey",
+        Description = "This passkey credential is already associated with another user.",
+    };
 }

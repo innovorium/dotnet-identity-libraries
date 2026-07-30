@@ -18,6 +18,7 @@ internal sealed class MartenIdentityPendingChanges<TDocument>
 
     private readonly List<Action<IDocumentSession>> _operations = [];
     private TDocument? _document;
+    private IdentityError? _failure;
     private bool _validationObserved;
 
     public MartenIdentityPendingChangeKind Kind { get; private set; }
@@ -45,6 +46,29 @@ internal sealed class MartenIdentityPendingChanges<TDocument>
         _operations.Add(operation);
     }
 
+    public void Reject(TDocument document, IdentityError failure)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(failure);
+        Clear();
+        _document = document;
+        _failure = failure;
+        Owners.Add(document, this);
+    }
+
+    public bool TryTakeFailure(TDocument document, out IdentityError? failure)
+    {
+        if (!ReferenceEquals(_document, document) || _failure is null)
+        {
+            failure = null;
+            return false;
+        }
+
+        failure = _failure;
+        Clear();
+        return true;
+    }
+
     public void Materialize(IDocumentSession session, TDocument document)
     {
         if (!ReferenceEquals(_document, document))
@@ -68,6 +92,7 @@ internal sealed class MartenIdentityPendingChanges<TDocument>
 
         _operations.Clear();
         _document = null;
+        _failure = null;
         _validationObserved = false;
         Kind = default;
     }
@@ -87,6 +112,17 @@ internal sealed class MartenIdentityPendingChanges<TDocument>
 
         pending._validationObserved = true;
     }
+
+    public static IdentityError? TakeFailure(TDocument document)
+    {
+        if (!Owners.TryGetValue(document, out var pending) ||
+            !pending.TryTakeFailure(document, out var failure))
+        {
+            return null;
+        }
+
+        return failure;
+    }
 }
 
 internal sealed class MartenPendingUserChangesValidator<TUser> : IUserValidator<TUser>
@@ -96,6 +132,12 @@ internal sealed class MartenPendingUserChangesValidator<TUser> : IUserValidator<
     {
         ArgumentNullException.ThrowIfNull(manager);
         ArgumentNullException.ThrowIfNull(user);
+        var failure = MartenIdentityPendingChanges<TUser>.TakeFailure(user);
+        if (failure is not null)
+        {
+            return Task.FromResult(IdentityResult.Failed(failure));
+        }
+
         MartenIdentityPendingChanges<TUser>.ValidationStarting(user);
         return Task.FromResult(IdentityResult.Success);
     }

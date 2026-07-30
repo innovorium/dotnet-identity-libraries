@@ -23,6 +23,7 @@ internal static class MartenIdentitySchema
     public const string UserLoginUserIdIndex = "idx_identity_user_login_user_id";
     public const string UserTokenUserIdIndex = "idx_identity_user_token_user_id";
     public const string UserPasskeyUserIdIndex = "idx_identity_user_passkey_user_id";
+    public const string UserPasskeyPrimaryKey = "pkey_mt_doc_identity_user_passkey_id";
     public const string UserRoleUserIdIndex = "idx_identity_user_role_user_id";
     public const string UserRoleRoleIdIndex = "idx_identity_user_role_role_id";
     public const string UserRoleRoleForeignKey = "mt_doc_identity_user_role_role_id_fkey";

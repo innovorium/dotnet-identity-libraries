@@ -355,6 +355,13 @@ public partial class MartenUserOnlyStore<TUser> :
         var id = MartenIdentityDocumentId.UserPasskey(passkey.CredentialId);
         var document = await _session.LoadAsync<MartenIdentityUserPasskey<TUser>>(id, cancellationToken)
             .ConfigureAwait(false);
+        if (document is not null && !string.Equals(document.UserId, user.Id, StringComparison.Ordinal))
+        {
+            RejectPendingChanges(user, MartenIdentityErrors.DuplicatePasskey());
+            return;
+        }
+
+        var isNew = document is null;
         document ??= new MartenIdentityUserPasskey<TUser>
         {
             Id = id,
@@ -362,7 +369,17 @@ public partial class MartenUserOnlyStore<TUser> :
         };
         document.Update(passkey);
         BeginPendingChanges(user);
-        AddPendingChange(session => session.Store(document));
+        AddPendingChange(session =>
+        {
+            if (isNew)
+            {
+                session.Insert(document);
+            }
+            else
+            {
+                session.Store(document);
+            }
+        });
     }
 
     /// <inheritdoc />
