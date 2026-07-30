@@ -22,6 +22,7 @@ Before creating a tag:
 6. The protected `release` GitHub environment approves publication.
 
 Release artifacts include packages, symbol packages, and `SHA256SUMS`.
+GitHub releases generated from tags containing a prerelease suffix are marked as prereleases automatically.
 
 NuGet.org publication uses trusted publishing with GitHub OIDC and a short-lived API key. Configure a NuGet trusted-publishing policy for the Innovorium owner, this repository, `release.yml`, and the `release` environment. NuGet's `login` action requires the public username of the policy creator, which is declared directly in the workflow; no long-lived NuGet credential or repository secret is required.
 
