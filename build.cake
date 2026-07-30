@@ -194,7 +194,11 @@ Task("Test")
             {
                 Configuration = configuration,
                 NoBuild = true,
-                NoRestore = true
+                NoRestore = true,
+                // Both provider suites apply Marten's shared database support
+                // objects. Run test projects sequentially to avoid concurrent
+                // DDL against the same disposable PostgreSQL service.
+                ArgumentCustomization = arguments => arguments.Append("--maxcpucount:1")
             });
     });
 
