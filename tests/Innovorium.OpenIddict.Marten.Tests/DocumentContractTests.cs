@@ -61,6 +61,92 @@ public sealed class DocumentContractTests
     }
 
     [Fact]
+    public async Task AuthorizationStoreRoundTripsOpenIddictValues()
+    {
+        var session = RecordingDocumentSession.Create(out _);
+        var store = new MartenOpenIddictAuthorizationStore(session);
+        Assert.IsAssignableFrom<IOpenIddictAuthorizationStore<OpenIddictMartenAuthorization>>(store);
+        var authorization = await store.InstantiateAsync(TestContext.Current.CancellationToken);
+        var applicationId = Guid.NewGuid();
+        var creationDate = DateTimeOffset.Parse(
+            "2026-07-30T10:00:00Z",
+            CultureInfo.InvariantCulture);
+        var scopes = ImmutableArray.Create("openid", "profile");
+
+        await store.SetApplicationIdAsync(
+            authorization,
+            applicationId.ToString("D"),
+            TestContext.Current.CancellationToken);
+        await store.SetCreationDateAsync(authorization, creationDate, TestContext.Current.CancellationToken);
+        await store.SetScopesAsync(authorization, scopes, TestContext.Current.CancellationToken);
+        await store.SetStatusAsync(
+            authorization,
+            OpenIddictConstants.Statuses.Valid,
+            TestContext.Current.CancellationToken);
+        await store.SetSubjectAsync(authorization, "customer-42", TestContext.Current.CancellationToken);
+        await store.SetTypeAsync(
+            authorization,
+            OpenIddictConstants.AuthorizationTypes.Permanent,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            applicationId.ToString("D"),
+            await store.GetApplicationIdAsync(authorization, TestContext.Current.CancellationToken));
+        Assert.Equal(creationDate, await store.GetCreationDateAsync(
+            authorization,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(scopes, await store.GetScopesAsync(authorization, TestContext.Current.CancellationToken));
+        Assert.Equal(OpenIddictConstants.Statuses.Valid, await store.GetStatusAsync(
+            authorization,
+            TestContext.Current.CancellationToken));
+        Assert.Equal("customer-42", await store.GetSubjectAsync(
+            authorization,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(OpenIddictConstants.AuthorizationTypes.Permanent, await store.GetTypeAsync(
+            authorization,
+            TestContext.Current.CancellationToken));
+        Assert.IsAssignableFrom<IRevisioned>(authorization);
+    }
+
+    [Fact]
+    public async Task TokenStoreRoundTripsOpenIddictValues()
+    {
+        var session = RecordingDocumentSession.Create(out _);
+        var store = new MartenOpenIddictTokenStore(session, TimeProvider.System);
+        Assert.IsAssignableFrom<IOpenIddictTokenStore<OpenIddictMartenToken>>(store);
+        var token = await store.InstantiateAsync(TestContext.Current.CancellationToken);
+        var applicationId = Guid.NewGuid();
+        var authorizationId = Guid.NewGuid();
+        var creationDate = DateTimeOffset.Parse("2026-07-30T10:00:00Z", CultureInfo.InvariantCulture);
+        var expirationDate = creationDate.AddHours(1);
+        var redemptionDate = creationDate.AddMinutes(5);
+
+        await store.SetApplicationIdAsync(token, applicationId.ToString("D"), TestContext.Current.CancellationToken);
+        await store.SetAuthorizationIdAsync(token, authorizationId.ToString("D"), TestContext.Current.CancellationToken);
+        await store.SetCreationDateAsync(token, creationDate, TestContext.Current.CancellationToken);
+        await store.SetExpirationDateAsync(token, expirationDate, TestContext.Current.CancellationToken);
+        await store.SetPayloadAsync(token, "protected-payload", TestContext.Current.CancellationToken);
+        await store.SetRedemptionDateAsync(token, redemptionDate, TestContext.Current.CancellationToken);
+        await store.SetReferenceIdAsync(token, "hashed-reference", TestContext.Current.CancellationToken);
+        await store.SetStatusAsync(token, OpenIddictConstants.Statuses.Valid, TestContext.Current.CancellationToken);
+        await store.SetSubjectAsync(token, "customer-42", TestContext.Current.CancellationToken);
+        await store.SetTypeAsync(token, OpenIddictConstants.TokenTypeHints.AccessToken, TestContext.Current.CancellationToken);
+
+        Assert.Equal(applicationId.ToString("D"), await store.GetApplicationIdAsync(
+            token,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(authorizationId.ToString("D"), await store.GetAuthorizationIdAsync(
+            token,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(creationDate, await store.GetCreationDateAsync(token, TestContext.Current.CancellationToken));
+        Assert.Equal(expirationDate, await store.GetExpirationDateAsync(token, TestContext.Current.CancellationToken));
+        Assert.Equal("protected-payload", await store.GetPayloadAsync(token, TestContext.Current.CancellationToken));
+        Assert.Equal(redemptionDate, await store.GetRedemptionDateAsync(token, TestContext.Current.CancellationToken));
+        Assert.Equal("hashed-reference", await store.GetReferenceIdAsync(token, TestContext.Current.CancellationToken));
+        Assert.IsAssignableFrom<IRevisioned>(token);
+    }
+
+    [Fact]
     public async Task PropertyValuesAreDetachedFromTheSourceJsonDocument()
     {
         var session = RecordingDocumentSession.Create(out _);

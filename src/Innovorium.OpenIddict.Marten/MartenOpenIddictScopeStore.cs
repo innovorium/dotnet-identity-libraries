@@ -12,12 +12,17 @@ using OpenIddict.Abstractions;
 namespace Innovorium.OpenIddict.Marten;
 
 internal sealed class MartenOpenIddictScopeStore(
-    IDocumentSession session) : IOpenIddictScopeStore<OpenIddictMartenScope>
+    IDocumentStore store) : IOpenIddictScopeStore<OpenIddictMartenScope>
 {
-    private readonly IDocumentSession _session = session ?? throw new ArgumentNullException(nameof(session));
+    private readonly IDocumentStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async ValueTask<long> CountAsync(CancellationToken cancellationToken)
-        => await _session.Query<OpenIddictMartenScope>().LongCountAsync(cancellationToken).ConfigureAwait(false);
+    {
+        await using var session = _store.LightweightSession();
+        return await session.Query<OpenIddictMartenScope>()
+            .LongCountAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
 
 #pragma warning disable CS8714 // OpenIddict leaves TResult unconstrained; Marten's async LINQ API adds notnull.
     public async ValueTask<long> CountAsync<TResult>(
@@ -26,7 +31,8 @@ internal sealed class MartenOpenIddictScopeStore(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return await query(_session.Query<OpenIddictMartenScope>())
+        await using var session = _store.LightweightSession();
+        return await query(session.Query<OpenIddictMartenScope>())
             .LongCountAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -38,8 +44,9 @@ internal sealed class MartenOpenIddictScopeStore(
     {
         ArgumentNullException.ThrowIfNull(scope);
 
-        _session.Insert(scope);
-        await _session.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await using var session = _store.LightweightSession();
+        session.Insert(scope);
+        await session.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask DeleteAsync(
@@ -48,7 +55,7 @@ internal sealed class MartenOpenIddictScopeStore(
     {
         ArgumentNullException.ThrowIfNull(scope);
 
-        var mapping = _session.DocumentStore.Options.FindOrResolveDocumentType(
+        var mapping = _store.Options.FindOrResolveDocumentType(
             typeof(OpenIddictMartenScope));
 
         if (mapping.TenancyStyle != TenancyStyle.Single)
@@ -62,15 +69,14 @@ internal sealed class MartenOpenIddictScopeStore(
         command.Parameters.Add("id", NpgsqlDbType.Uuid).Value = scope.Id;
         command.Parameters.Add("version", NpgsqlDbType.Integer).Value = scope.Version;
 
+        await using var session = _store.LightweightSession();
         try
         {
-            var affectedRows = await _session.ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
+            var affectedRows = await session.ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
             if (affectedRows != 1)
             {
                 throw new JasperFx.ConcurrencyException(typeof(OpenIddictMartenScope), scope.Id);
             }
-
-            _session.Eject(scope);
         }
         catch (Exception exception) when (
             OpenIddictMartenExceptionHelper.IsConcurrencyException(exception))
@@ -88,9 +94,13 @@ internal sealed class MartenOpenIddictScopeStore(
     {
         ArgumentException.ThrowIfNullOrEmpty(identifier);
 
-        return Guid.TryParse(identifier, out var id)
-            ? await _session.LoadAsync<OpenIddictMartenScope>(id, cancellationToken).ConfigureAwait(false)
-            : null;
+        if (!Guid.TryParse(identifier, out var id))
+        {
+            return null;
+        }
+
+        await using var session = _store.LightweightSession();
+        return await session.LoadAsync<OpenIddictMartenScope>(id, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask<OpenIddictMartenScope?> FindByNameAsync(
@@ -99,7 +109,8 @@ internal sealed class MartenOpenIddictScopeStore(
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        await foreach (var scope in _session.Query<OpenIddictMartenScope>()
+        await using var session = _store.LightweightSession();
+        await foreach (var scope in session.Query<OpenIddictMartenScope>()
             .Where(scope => scope.Name == name)
             .ToAsyncEnumerable(cancellationToken)
             .ConfigureAwait(false))
@@ -131,9 +142,12 @@ internal sealed class MartenOpenIddictScopeStore(
         var requested = values.ToHashSet(StringComparer.Ordinal);
 
         return FilterAsync(
-            _session.Query<OpenIddictMartenScope>()
-                .Where(scope => values.Contains(scope.Name!))
-                .ToAsyncEnumerable(cancellationToken),
+            MartenOpenIddictSession.QueryAsync(
+                _store,
+                (session, token) => session.Query<OpenIddictMartenScope>()
+                    .Where(scope => values.Contains(scope.Name!))
+                    .ToAsyncEnumerable(token),
+                cancellationToken),
             scope => scope.Name is not null && requested.Contains(scope.Name),
             cancellationToken);
     }
@@ -145,9 +159,12 @@ internal sealed class MartenOpenIddictScopeStore(
         ArgumentException.ThrowIfNullOrEmpty(resource);
 
         return FilterAsync(
-            _session.Query<OpenIddictMartenScope>()
-                .Where(scope => scope.Resources.Contains(resource))
-                .ToAsyncEnumerable(cancellationToken),
+            MartenOpenIddictSession.QueryAsync(
+                _store,
+                (session, token) => session.Query<OpenIddictMartenScope>()
+                    .Where(scope => scope.Resources.Contains(resource))
+                    .ToAsyncEnumerable(token),
+                cancellationToken),
             scope => scope.Resources.Contains(resource, StringComparer.Ordinal),
             cancellationToken);
     }
@@ -160,7 +177,8 @@ internal sealed class MartenOpenIddictScopeStore(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return await query(_session.Query<OpenIddictMartenScope>(), state)
+        await using var session = _store.LightweightSession();
+        return await query(session.Query<OpenIddictMartenScope>(), state)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
     }
@@ -244,21 +262,27 @@ internal sealed class MartenOpenIddictScopeStore(
         int? offset,
         CancellationToken cancellationToken)
     {
-        IQueryable<OpenIddictMartenScope> query = _session
-            .Query<OpenIddictMartenScope>()
-            .OrderBy(scope => scope.Id);
+        return MartenOpenIddictSession.QueryAsync(
+            _store,
+            (session, token) =>
+            {
+                IQueryable<OpenIddictMartenScope> query = session
+                    .Query<OpenIddictMartenScope>()
+                    .OrderBy(scope => scope.Id);
 
-        if (offset is not null)
-        {
-            query = query.Skip(offset.Value);
-        }
+                if (offset is not null)
+                {
+                    query = query.Skip(offset.Value);
+                }
 
-        if (count is not null)
-        {
-            query = query.Take(count.Value);
-        }
+                if (count is not null)
+                {
+                    query = query.Take(count.Value);
+                }
 
-        return query.ToAsyncEnumerable(cancellationToken);
+                return query.ToAsyncEnumerable(token);
+            },
+            cancellationToken);
     }
 
 #pragma warning disable CS8714 // OpenIddict leaves TResult unconstrained; Marten's async LINQ API adds notnull.
@@ -269,8 +293,11 @@ internal sealed class MartenOpenIddictScopeStore(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        return query(_session.Query<OpenIddictMartenScope>(), state)
-            .ToAsyncEnumerable(cancellationToken);
+        return MartenOpenIddictSession.QueryAsync(
+            _store,
+            (session, token) => query(session.Query<OpenIddictMartenScope>(), state)
+                .ToAsyncEnumerable(token),
+            cancellationToken);
     }
 #pragma warning restore CS8714
 
@@ -358,17 +385,12 @@ internal sealed class MartenOpenIddictScopeStore(
 
         try
         {
-            if (!await _session.CheckExistsAsync<OpenIddictMartenScope>(
-                scope.Id,
-                cancellationToken).ConfigureAwait(false))
-            {
-                throw new global::Marten.Exceptions.NonExistentDocumentException(
-                    typeof(OpenIddictMartenScope),
-                    scope.Id);
-            }
-
-            _session.UpdateRevision(scope, checked(scope.Version + 1));
-            await _session.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await using var session = _store.LightweightSession();
+            MartenOpenIddictRevisionedUpdate.Queue(
+                session,
+                scope,
+                checked(scope.Version + 1));
+            await session.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (
             OpenIddictMartenExceptionHelper.IsConcurrencyException(exception))

@@ -6,9 +6,37 @@ namespace Innovorium.OpenIddict.Marten.Tests;
 
 public sealed class ConcurrencyContractTests
 {
+    [Fact]
+    public void BulkRevocationRejectsDocumentsChangedAfterTheTargetSnapshot()
+    {
+        var session = RecordingDocumentSession.CreateSession(out var recorder);
+        var identifier = Guid.NewGuid();
+        var token = new OpenIddictMartenToken
+        {
+            Id = identifier,
+            Version = 2,
+            Status = OpenIddictConstants.Statuses.Valid,
+        };
+
+        Assert.Throws<OpenIddictExceptions.ConcurrencyException>(() =>
+            MartenOpenIddictBulkOperations.QueueRevocations(
+                session,
+                [new MartenOpenIddictBulkTarget(identifier, 1)],
+                [token],
+                static value => value.Id,
+                static value => value.Version,
+                static value => value.Status = OpenIddictConstants.Statuses.Revoked,
+                "token"));
+
+        Assert.Equal(OpenIddictConstants.Statuses.Valid, token.Status);
+        Assert.Empty(recorder.TakeMutationCalls());
+    }
+
     [Theory]
     [InlineData("application")]
+    [InlineData("authorization")]
     [InlineData("scope")]
+    [InlineData("token")]
     public async Task StoresTranslateNestedMartenConcurrencyFailures(string entity)
     {
         var session = RecordingDocumentSession.Create(out var recorder);
@@ -26,12 +54,28 @@ public sealed class ConcurrencyContractTests
                     new OpenIddictMartenApplication { Version = 1 },
                     TestContext.Current.CancellationToken));
         }
-        else
+        else if (entity == "authorization")
+        {
+            var store = new MartenOpenIddictAuthorizationStore(session);
+            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+                await store.UpdateAsync(
+                    new OpenIddictMartenAuthorization { Version = 1 },
+                    TestContext.Current.CancellationToken));
+        }
+        else if (entity == "scope")
         {
             var store = new MartenOpenIddictScopeStore(session);
             exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
                 await store.UpdateAsync(
                     new OpenIddictMartenScope { Version = 1 },
+                    TestContext.Current.CancellationToken));
+        }
+        else
+        {
+            var store = new MartenOpenIddictTokenStore(session, TimeProvider.System);
+            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+                await store.UpdateAsync(
+                    new OpenIddictMartenToken { Version = 1 },
                     TestContext.Current.CancellationToken));
         }
 
@@ -54,7 +98,9 @@ public sealed class ConcurrencyContractTests
 
     [Theory]
     [InlineData("application")]
+    [InlineData("authorization")]
     [InlineData("scope")]
+    [InlineData("token")]
     public async Task UpdatesTranslateMissingDocumentFailures(string entity)
     {
         var session = RecordingDocumentSession.Create(out var recorder);
@@ -69,11 +115,25 @@ public sealed class ConcurrencyContractTests
                     new OpenIddictMartenApplication { Id = id, Version = 1 },
                     TestContext.Current.CancellationToken));
         }
-        else
+        else if (entity == "authorization")
+        {
+            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+                await new MartenOpenIddictAuthorizationStore(session).UpdateAsync(
+                    new OpenIddictMartenAuthorization { Id = id, Version = 1 },
+                    TestContext.Current.CancellationToken));
+        }
+        else if (entity == "scope")
         {
             exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
                 await new MartenOpenIddictScopeStore(session).UpdateAsync(
                     new OpenIddictMartenScope { Id = id, Version = 1 },
+                    TestContext.Current.CancellationToken));
+        }
+        else
+        {
+            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+                await new MartenOpenIddictTokenStore(session, TimeProvider.System).UpdateAsync(
+                    new OpenIddictMartenToken { Id = id, Version = 1 },
                     TestContext.Current.CancellationToken));
         }
 
@@ -82,7 +142,9 @@ public sealed class ConcurrencyContractTests
 
     [Theory]
     [InlineData("application")]
+    [InlineData("authorization")]
     [InlineData("scope")]
+    [InlineData("token")]
     public async Task DeleteTranslatesZeroAffectedRows(string entity)
     {
         var session = RecordingDocumentSession.Create(out var recorder);
@@ -95,11 +157,25 @@ public sealed class ConcurrencyContractTests
                     new OpenIddictMartenApplication { Version = 1 },
                     TestContext.Current.CancellationToken));
         }
-        else
+        else if (entity == "authorization")
+        {
+            await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+                await new MartenOpenIddictAuthorizationStore(session).DeleteAsync(
+                    new OpenIddictMartenAuthorization { Version = 1 },
+                    TestContext.Current.CancellationToken));
+        }
+        else if (entity == "scope")
         {
             await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
                 await new MartenOpenIddictScopeStore(session).DeleteAsync(
                     new OpenIddictMartenScope { Version = 1 },
+                    TestContext.Current.CancellationToken));
+        }
+        else
+        {
+            await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+                await new MartenOpenIddictTokenStore(session, TimeProvider.System).DeleteAsync(
+                    new OpenIddictMartenToken { Version = 1 },
                     TestContext.Current.CancellationToken));
         }
 

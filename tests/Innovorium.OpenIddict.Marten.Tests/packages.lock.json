@@ -655,7 +655,9 @@
         "type": "Project",
         "dependencies": {
           "Marten": "[9.21.0, 10.0.0)",
-          "OpenIddict.Core": "[7.6.0, 8.0.0)"
+          "Npgsql": "[9.0.4, 10.0.0)",
+          "OpenIddict.Core": "[7.6.0, 8.0.0)",
+          "Weasel.Storage": "[9.17.0, 10.0.0)"
         }
       },
       "Marten": {

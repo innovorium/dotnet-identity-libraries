@@ -7,6 +7,7 @@ using Xunit;
 
 namespace Innovorium.OpenIddict.Marten.Tests;
 
+[Collection("OpenIddict PostgreSQL")]
 public sealed class PostgreSqlIntegrationTests
 {
     private const string ConnectionVariable = "INNOVORIUM_TEST_POSTGRES";

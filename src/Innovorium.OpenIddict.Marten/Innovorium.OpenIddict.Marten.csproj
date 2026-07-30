@@ -8,6 +8,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Marten" />
+    <PackageReference Include="Npgsql" />
     <PackageReference Include="OpenIddict.Core" />
+    <PackageReference Include="Weasel.Storage" />
   </ItemGroup>
 </Project>
