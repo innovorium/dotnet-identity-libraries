@@ -19,14 +19,15 @@ Before creating a tag:
 3. Public API files and `CHANGELOG.md` describe the release.
 4. Cake's package inspection verifies exact dependency ranges, shared package versions, portable symbols with commit-bound SourceLink, README, MIT license metadata, and the repository URL and commit.
 5. A clean consumer can restore and compile against the produced packages.
-6. The protected `release` GitHub environment approves publication.
+6. The `release` GitHub environment has required reviewers, prevents
+   self-review and administrator bypass, and approves publication.
 
 Release artifacts include packages, symbol packages, and `SHA256SUMS`.
 GitHub releases generated from tags containing a prerelease suffix are marked as prereleases automatically.
 
 The release workflow keeps build inputs away from publishing credentials. Its read-only `build` job checks out without persisted credentials, runs the Cake `Release` target, and uploads only the verified package set. The downstream `publish` job starts only after the protected `release` environment approves it, downloads that immutable workflow artifact without checking out repository code, verifies `SHA256SUMS`, creates package attestations, and publishes the same files to NuGet.org and the GitHub release.
 
-NuGet.org publication uses trusted publishing with GitHub OIDC and a short-lived API key requested immediately before publication. Configure a NuGet trusted-publishing policy for the Innovorium owner, this repository, `release.yml`, and the `release` environment. NuGet's `login` action requires the public username of the policy creator, which is declared directly in the workflow; no long-lived NuGet credential or repository secret is required.
+NuGet.org publication uses trusted publishing with GitHub OIDC and a short-lived API key requested immediately before publication. Configure and verify a NuGet trusted-publishing policy for the Innovorium owner, this repository, `release.yml`, and the `release` environment before creating a release tag. NuGet's `login` action requires the public username of the policy creator, which is declared directly in the workflow; no long-lived NuGet credential or repository secret is required.
 
 ## Failure policy
 

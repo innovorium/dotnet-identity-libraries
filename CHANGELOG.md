@@ -8,21 +8,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- A user-only ASP.NET Core Identity store slice with string-keyed extensible
-  user documents, core account/security fields, Marten mapping, isolated
-  sessions, optimistic concurrency, and `AddMartenStores()` registration.
-- OpenIddict application and scope document/store slices with `UseMarten()`
-  registration, revision-aware persistence, stable aliases, and named indexes.
-- Focused contract, registration, package-consumer, and concurrency coverage.
+- An unreleased Marten-backed ASP.NET Core Identity source implementation with
+  string-keyed extensible user and role documents, `AddMartenStores()`
+  registration, account/security relationship stores, optimistic concurrency,
+  and package-owned sessions.
+- An unreleased OpenIddict source implementation with application,
+  authorization, scope, and token documents/stores, `UseMarten()` registration,
+  revision-aware persistence, bulk operations, and named Marten indexes.
+- Standalone source samples that exercise `UserManager`/`RoleManager` and the
+  OpenIddict application manager while keeping connection and schema lifecycle
+  ownership in the host application.
+- Consumption, persisted-contract, and upgrade-boundary guidance.
 
-### Not yet included
+### Still not claimed
 
-- Identity roles, claims, external logins, tokens, authenticator/recovery codes,
-  or .NET 10 passkeys.
-- OpenIddict authorization and token stores, cascades, revocation, or pruning.
-- Complete PostgreSQL integration coverage for the OpenIddict slice.
+- A published functional NuGet package or a stable provider compatibility
+  promise.
+- Migration tooling, automatic production schema deployment, or a managed
+  database lifecycle.
+- Custom entity models, named document stores, or multi-tenant provider
+  storage.
+- OpenIddict server endpoints, consent UI, signing credentials, issuer policy,
+  or token validation configuration.
 
-These unreleased slices are not yet a complete provider release.
+The source work is not yet a provider release. Use the samples only from this
+checkout and wait for versioned release notes before consuming a NuGet package.
 
 ## [0.1.0-alpha.2] - 2026-07-30
 

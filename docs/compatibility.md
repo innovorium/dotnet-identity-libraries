@@ -13,6 +13,21 @@
 
 The ranges exclude the next major version until it has been reviewed. Preview dependencies are outside this baseline.
 
+## Unreleased source snapshot
+
+The `main` branch currently contains source-only provider work. It is useful
+for maintainers and evaluators, but has no versioned compatibility promise and
+is not an installation target. The sample projects reference the local source
+projects so that their APIs cannot be confused with the published `alpha.2`
+packages.
+
+The default documents, aliases, indexes, and concurrency fields introduced by
+an eventual release are persisted-data contracts. Before upgrading between
+released versions, read that release's notes and apply any reviewed schema work
+through the host's database delivery process. This project does not supply or
+run migrations, and it does not support using `AutoCreate.CreateOrUpdate` as a
+production upgrade mechanism.
+
 ## Preview policy
 
 When a functional prerelease is announced, its release notes will state the exact supported package and framework versions, public API status, persistence/document compatibility, upgrade guidance, and any known limitations. Until then:

@@ -1,6 +1,6 @@
 # Customer experience
 
-This page sets expectations for evaluators, adopters, and contributors. It is intentionally explicit because the current release is a foundation, not a working provider.
+This page sets expectations for evaluators, adopters, and contributors. It is intentionally explicit because the published release is a foundation, not a working provider.
 
 ## Start here
 
@@ -13,6 +13,20 @@ This page sets expectations for evaluators, adopters, and contributors. It is in
 | Propose a bounded future capability | Welcome | Start with [Discussions](https://github.com/innovorium/dotnet-identity-libraries/discussions), then open a focused proposal if it needs a tracked decision |
 | Report a security concern | Accepted privately | Follow [SECURITY.md](../SECURITY.md) |
 
+## Evaluating the unreleased source
+
+The repository includes source samples for the Identity and OpenIddict
+registrations. They are deliberately local-project examples: they do not make
+the nonfunctional `0.1.0-alpha.2` NuGet packages usable or promise an upcoming
+package version. See [Identity sample](../samples/Identity/README.md) and
+[OpenIddict sample](../samples/OpenIddict/README.md).
+
+The samples set `AutoCreate.None` and fail when their host-owned connection
+string is absent. They assume that the application team has already reviewed
+and applied the required Marten schema in the target environment. Never put
+production credentials in sample configuration or use automatic schema updates
+as a deployment strategy.
+
 ## What consuming a future provider will mean
 
 A future functional release will provide a documented library integration, not a hosted service or turnkey identity system. Consumers will be expected to:
@@ -24,6 +38,16 @@ A future functional release will provide a documented library integration, not a
 5. Test their exact application, persistence topology, and upgrade path before production adoption.
 
 The library is not responsible for application profiles, organization membership, authorization policy, legacy-data migration, import/export, UI, administration, user support, or production operations.
+
+### Keep identity separate from application profiles
+
+The Identity user is an authentication and account record. Keep product-owned
+profile data, such as a display preference, customer attributes, or workspace
+membership, in host-owned documents and services keyed by the Identity user ID.
+That separation keeps credential lifecycle and application-domain lifecycle
+independent: the provider does not become a profile, tenancy, CRM, or helpdesk
+model. It is the same practical boundary that keeps a support system's requester
+identity distinct from the ticket or customer context it belongs to.
 
 ## Clear, bounded collaboration
 

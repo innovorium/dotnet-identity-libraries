@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>Innovorium.OpenIddict.Marten.Sample</AssemblyName>
+    <RootNamespace>Innovorium.OpenIddict.Marten.Sample</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Innovorium.OpenIddict.Marten/Innovorium.OpenIddict.Marten.csproj" />
+  </ItemGroup>
+</Project>

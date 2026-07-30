@@ -1,8 +1,9 @@
 # Architecture
 
-This document records the intended provider contract. The published
-`0.1.0-alpha.2` packages do not implement it; see the README for current release
-status.
+This document records the provider contract being developed on `main`. The
+published `0.1.0-alpha.2` packages do not implement it; see the README for the
+current release boundary. Source implementation is not a released compatibility
+promise.
 
 ## Purpose
 
@@ -12,13 +13,17 @@ This repository is intended to provide independent Marten persistence integratio
 
 ### Innovorium.AspNetCore.Identity.Marten
 
-Will own ASP.NET Core Identity store implementations, default document models, Marten schema configuration, and dependency-injection registration.
+Owns ASP.NET Core Identity store implementations, default document models,
+Marten schema configuration, and dependency-injection registration in the
+unreleased source.
 
 It does not own application profiles, organization memberships, authorization policy, connection strings, database lifecycle, or schema deployment.
 
 ### Innovorium.OpenIddict.Marten
 
-Will own OpenIddict application, authorization, scope, and token stores; their default document models; Marten schema configuration; and dependency-injection registration.
+Owns OpenIddict application, authorization, scope, and token stores; their
+default document models; Marten schema configuration; and dependency-injection
+registration in the unreleased source.
 
 It does not own server endpoints, consent user experience, signing credentials, issuer selection, or application-domain users.
 
@@ -31,8 +36,9 @@ It does not own server endpoints, consent user experience, signing credentials, 
 - Reuse framework contracts instead of introducing a public abstractions package.
 - Keep Identity commits isolated in a package-owned scoped lightweight session
   so an Identity operation cannot accidentally flush unrelated host work.
-- Follow OpenIddict's scoped-store convention for its stores and document that
-  a mutating store operation flushes the scoped Marten session.
+- Keep OpenIddict database operations in package-owned, per-operation
+  lightweight sessions so a store mutation never flushes unrelated work from
+  the host application's scoped Marten session.
 - Enforce uniqueness in PostgreSQL indexes, not application pre-checks.
 - Use Marten optimistic concurrency for mutable security documents.
 - Keep automatic production schema changes disabled.
@@ -48,32 +54,30 @@ It does not own server endpoints, consent user experience, signing credentials, 
 - Multi-targeting older .NET versions.
 - A shared public utility package without an independently proven consumer.
 
-## Delivery sequence
+## Delivery sequence and release boundary
 
 1. Repository, build, package, security, and release foundation.
-2. Complete ASP.NET Core Identity store surface and manager-level verification.
-3. OpenIddict application and scope stores.
-4. OpenIddict authorization and token stores, including pruning and revocation.
-5. Optional fail-closed Identity tenancy after the global model is proven.
+2. Identity and OpenIddict store implementation, persistence contracts, and
+   source samples.
+3. Release-grade compatibility review, PostgreSQL coverage, and published
+   package documentation.
+4. Optional fail-closed Identity tenancy only after the global model is proven.
 
 Public APIs are introduced only with behavior tests and documentation. Package boundaries or persisted document shapes change only through an explicit design decision.
 
 ## Initial customer contracts
 
-The Identity provider starts with string identifiers and conventional
-`UserManager`/`RoleManager` integration. Its first public surface is limited to
-extensible Identity user and role documents, concrete stores, and
-`IdentityBuilder.AddMartenStores()`. Complete Identity 10 coverage includes
-passkeys before the provider is described as complete. Personal-data protection
-is not claimed until `IProtectedUserStore<TUser>` is implemented and verified.
+The Identity provider uses string identifiers and conventional
+`UserManager`/`RoleManager` integration. Its source surface uses extensible
+Identity user and role documents, concrete stores, and
+`IdentityBuilder.AddMartenStores()`. Personal-data protection is not claimed
+until `IProtectedUserStore<TUser>` is implemented and verified in a release.
 
-The OpenIddict provider starts with one opinionated `Guid`-identified document
-model and `OpenIddictCoreBuilder.UseMarten()`. Application and scope stores are
-the first delivery slice. Authorization and token stores follow only after the
-registration, query, concurrency, and schema contracts are proven against
-PostgreSQL. Custom entities, named document stores, and multi-tenant OpenIddict
-storage are deferred until a concrete customer need justifies their permanent
-API cost.
+The OpenIddict provider uses one opinionated `Guid`-identified document model
+and `OpenIddictCoreBuilder.UseMarten()`. Its source surface includes application,
+authorization, scope, and token stores. Custom entities, named document stores,
+and multi-tenant OpenIddict storage remain deferred until a concrete customer
+need justifies their permanent API cost.
 
 Both registration methods add mappings and store services only. They never set
 a connection string, change Marten's schema auto-creation policy, apply schema

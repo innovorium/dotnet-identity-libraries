@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>Innovorium.Identity.Marten.Sample</AssemblyName>
+    <RootNamespace>Innovorium.Identity.Marten.Sample</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Innovorium.AspNetCore.Identity.Marten/Innovorium.AspNetCore.Identity.Marten.csproj" />
+  </ItemGroup>
+</Project>
