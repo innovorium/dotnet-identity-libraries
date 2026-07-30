@@ -1,1 +1,46 @@
 #nullable enable
+Innovorium.AspNetCore.Identity.Marten.IdentityBuilderExtensions
+Innovorium.AspNetCore.Identity.Marten.MartenIdentityUser
+Innovorium.AspNetCore.Identity.Marten.MartenIdentityUser.MartenIdentityUser() -> void
+Innovorium.AspNetCore.Identity.Marten.MartenIdentityUser.Version.get -> System.Guid
+Innovorium.AspNetCore.Identity.Marten.MartenIdentityUser.Version.set -> void
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.CreateAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Identity.IdentityResult!>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.DeleteAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Identity.IdentityResult!>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.Dispose() -> void
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.FindByEmailAsync(string! normalizedEmail, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TUser?>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.FindByIdAsync(string! userId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TUser?>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.FindByNameAsync(string! normalizedUserName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TUser?>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetAccessFailedCountAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetEmailAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<string?>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetEmailConfirmedAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<bool>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetLockoutEnabledAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<bool>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetLockoutEndDateAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.DateTimeOffset?>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetNormalizedEmailAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<string?>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetNormalizedUserNameAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<string?>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetPasswordHashAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<string?>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetPhoneNumberAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<string?>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetPhoneNumberConfirmedAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<bool>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetSecurityStampAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<string?>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetTwoFactorEnabledAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<bool>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetUserIdAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<string!>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.GetUserNameAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<string?>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.HasPasswordAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<bool>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.IncrementAccessFailedCountAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.MartenUserOnlyStore(Marten.IDocumentStore! documentStore, Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Identity.IdentityOptions!>! options, Microsoft.AspNetCore.Identity.IdentityErrorDescriber! errorDescriber) -> void
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.ResetAccessFailedCountAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetEmailAsync(TUser! user, string? email, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetEmailConfirmedAsync(TUser! user, bool confirmed, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetLockoutEnabledAsync(TUser! user, bool enabled, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetLockoutEndDateAsync(TUser! user, System.DateTimeOffset? lockoutEnd, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetNormalizedEmailAsync(TUser! user, string? normalizedEmail, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetNormalizedUserNameAsync(TUser! user, string? normalizedName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetPasswordHashAsync(TUser! user, string? passwordHash, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetPhoneNumberAsync(TUser! user, string? phoneNumber, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetPhoneNumberConfirmedAsync(TUser! user, bool confirmed, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetSecurityStampAsync(TUser! user, string! stamp, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetTwoFactorEnabledAsync(TUser! user, bool enabled, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.SetUserNameAsync(TUser! user, string? userName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.UpdateAsync(TUser! user, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Identity.IdentityResult!>!
+Innovorium.AspNetCore.Identity.Marten.MartenUserOnlyStore<TUser>.Users.get -> System.Linq.IQueryable<TUser!>!
+static Innovorium.AspNetCore.Identity.Marten.IdentityBuilderExtensions.AddMartenStores(this Microsoft.AspNetCore.Identity.IdentityBuilder! builder) -> Microsoft.AspNetCore.Identity.IdentityBuilder!
