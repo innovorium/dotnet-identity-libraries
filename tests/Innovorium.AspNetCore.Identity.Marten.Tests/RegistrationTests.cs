@@ -32,6 +32,12 @@ public sealed class RegistrationTests
         Assert.IsAssignableFrom<IUserSecurityStampStore<ApplicationUser>>(store);
         Assert.IsAssignableFrom<IUserLockoutStore<ApplicationUser>>(store);
         Assert.IsAssignableFrom<IUserTwoFactorStore<ApplicationUser>>(store);
+        Assert.IsAssignableFrom<IUserClaimStore<ApplicationUser>>(store);
+        Assert.IsAssignableFrom<IUserLoginStore<ApplicationUser>>(store);
+        Assert.IsAssignableFrom<IUserAuthenticationTokenStore<ApplicationUser>>(store);
+        Assert.IsAssignableFrom<IUserAuthenticatorKeyStore<ApplicationUser>>(store);
+        Assert.IsAssignableFrom<IUserTwoFactorRecoveryCodeStore<ApplicationUser>>(store);
+        Assert.IsAssignableFrom<IUserPasskeyStore<ApplicationUser>>(store);
         Assert.True(manager.SupportsQueryableUsers);
         Assert.True(manager.SupportsUserPassword);
         Assert.True(manager.SupportsUserEmail);
@@ -39,6 +45,13 @@ public sealed class RegistrationTests
         Assert.True(manager.SupportsUserSecurityStamp);
         Assert.True(manager.SupportsUserLockout);
         Assert.True(manager.SupportsUserTwoFactor);
+        Assert.True(manager.SupportsUserClaim);
+        Assert.True(manager.SupportsUserLogin);
+        Assert.True(manager.SupportsUserAuthenticationTokens);
+        Assert.True(manager.SupportsUserAuthenticatorKey);
+        Assert.True(manager.SupportsUserTwoFactorRecoveryCodes);
+        Assert.True(manager.SupportsUserPasskey);
+        Assert.False(manager.SupportsUserRole);
     }
 
     [Fact]
@@ -111,15 +124,58 @@ public sealed class RegistrationTests
     }
 
     [Fact]
-    public void RoleEnabledIdentityIsRejectedUntilRoleStoresExist()
+    public void RoleEnabledIdentityRegistersUserRoleAndManagerCapabilities()
+    {
+        var services = CreateServices();
+        var builder = services.AddIdentityCore<ApplicationUser>().AddRoles<ApplicationRole>();
+        builder.AddMartenStores();
+        builder.AddMartenStores();
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var userStore = scope.ServiceProvider.GetRequiredService<IUserStore<ApplicationUser>>();
+        var roleStore = scope.ServiceProvider.GetRequiredService<IRoleStore<ApplicationRole>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+
+        Assert.IsType<MartenUserStore<ApplicationUser, ApplicationRole>>(userStore);
+        Assert.IsAssignableFrom<IUserRoleStore<ApplicationUser>>(userStore);
+        Assert.IsType<MartenRoleStore<ApplicationRole>>(roleStore);
+        Assert.IsAssignableFrom<IQueryableRoleStore<ApplicationRole>>(roleStore);
+        Assert.IsAssignableFrom<IRoleClaimStore<ApplicationRole>>(roleStore);
+        Assert.True(userManager.SupportsUserRole);
+        Assert.True(roleManager.SupportsQueryableRoles);
+        Assert.True(roleManager.SupportsRoleClaims);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IUserStore<ApplicationUser>));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRoleStore<ApplicationRole>));
+
+        using var documentStore = provider.GetRequiredService<IDocumentStore>();
+        var roleMapping = documentStore.Options.FindOrResolveDocumentType(typeof(ApplicationRole));
+        var membershipMapping = documentStore.Options.FindOrResolveDocumentType(typeof(MartenIdentityUserRole));
+        var roleClaimMapping = documentStore.Options.FindOrResolveDocumentType(
+            typeof(MartenIdentityRoleClaim<ApplicationRole>));
+        Assert.Equal(MartenIdentitySchema.RoleDocumentAlias, roleMapping.Alias);
+        Assert.True(roleMapping.UseOptimisticConcurrency);
+        Assert.Contains(roleMapping.Indexes, index => index.Name == MartenIdentitySchema.NormalizedRoleNameIndex);
+        Assert.Equal(MartenIdentitySchema.UserRoleDocumentAlias, membershipMapping.Alias);
+        Assert.Contains(
+            membershipMapping.Indexes,
+            index => index.Name == MartenIdentitySchema.UserRoleUserIdIndex);
+        Assert.Contains(
+            membershipMapping.Indexes,
+            index => index.Name == MartenIdentitySchema.UserRoleRoleIdIndex);
+        Assert.Equal(MartenIdentitySchema.RoleClaimDocumentAlias, roleClaimMapping.Alias);
+    }
+
+    [Fact]
+    public void RoleMustDeriveFromMartenIdentityRole()
     {
         var services = CreateServices();
         var builder = services.AddIdentityCore<ApplicationUser>().AddRoles<IdentityRole>();
 
-        var exception = Assert.Throws<NotSupportedException>((Action)(() => builder.AddMartenStores()));
+        var exception = Assert.Throws<InvalidOperationException>(() => builder.AddMartenStores());
 
-        Assert.Contains("user-only", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("AddIdentityCore", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(MartenIdentityRole), exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -174,4 +230,6 @@ public sealed class RegistrationTests
     }
 
     private sealed class ApplicationUser : MartenIdentityUser;
+
+    private sealed class ApplicationRole : MartenIdentityRole;
 }

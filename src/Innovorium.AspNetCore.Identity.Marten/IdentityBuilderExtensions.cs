@@ -1,6 +1,7 @@
 using Marten;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Innovorium.AspNetCore.Identity.Marten;
@@ -10,32 +11,25 @@ namespace Innovorium.AspNetCore.Identity.Marten;
 /// </summary>
 public static class IdentityBuilderExtensions
 {
-    internal const string UserDocumentAlias = "identity_user";
-    internal const string NormalizedUserNameIndex = "uidx_identity_user_normalized_username";
-    internal const string NormalizedEmailIndex = "idx_identity_user_normalized_email";
-    internal const string UniqueNormalizedEmailIndex = "uidx_identity_user_normalized_email";
+    internal const string UserDocumentAlias = MartenIdentitySchema.UserDocumentAlias;
+    internal const string NormalizedUserNameIndex = MartenIdentitySchema.NormalizedUserNameIndex;
+    internal const string NormalizedEmailIndex = MartenIdentitySchema.NormalizedEmailIndex;
+    internal const string UniqueNormalizedEmailIndex = MartenIdentitySchema.UniqueNormalizedEmailIndex;
 
     /// <summary>
-    /// Adds the Marten user store and its document mapping to an Identity builder.
+    /// Adds complete Marten-backed user stores and, when configured, role stores to an Identity builder.
     /// </summary>
     /// <remarks>
     /// The application remains responsible for configuring Marten's connection and schema lifecycle.
-    /// Role stores are not included in this initial provider slice.
+    /// Both user-only <c>AddIdentityCore&lt;TUser&gt;()</c> and role-enabled builders are supported.
     /// </remarks>
     /// <param name="builder">The Identity builder to extend.</param>
     /// <returns>The same builder so that additional Identity services can be chained.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="builder"/> is <see langword="null"/>.</exception>
-    /// <exception cref="NotSupportedException">The Identity builder has roles enabled.</exception>
+    /// <exception cref="InvalidOperationException">A configured user or role type does not derive from the corresponding Marten document type.</exception>
     public static IdentityBuilder AddMartenStores(this IdentityBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
-
-        if (builder.RoleType is not null)
-        {
-            throw new NotSupportedException(
-                "Innovorium.AspNetCore.Identity.Marten currently supports user-only IdentityBuilder registrations. " +
-                "Use AddIdentityCore<TUser>() until Marten role stores are available.");
-        }
 
         if (!typeof(MartenIdentityUser).IsAssignableFrom(builder.UserType))
         {
@@ -43,9 +37,21 @@ public static class IdentityBuilderExtensions
                 $"The configured user type '{builder.UserType}' must derive from {nameof(MartenIdentityUser)}.");
         }
 
+        if (builder.RoleType is not null && !typeof(MartenIdentityRole).IsAssignableFrom(builder.RoleType))
+        {
+            throw new InvalidOperationException(
+                $"The configured role type '{builder.RoleType}' must derive from {nameof(MartenIdentityRole)}.");
+        }
+
+        var methodName = builder.RoleType is null
+            ? nameof(AddMartenStoresForUser)
+            : nameof(AddMartenStoresForUserAndRole);
+        var typeArguments = builder.RoleType is null
+            ? new[] { builder.UserType }
+            : new[] { builder.UserType, builder.RoleType };
         var method = typeof(IdentityBuilderExtensions)
-            .GetMethod(nameof(AddMartenStoresForUser), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
-            .MakeGenericMethod(builder.UserType);
+            .GetMethod(methodName, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .MakeGenericMethod(typeArguments);
 
         return (IdentityBuilder)method.Invoke(null, [builder])!;
     }
@@ -60,28 +66,51 @@ public static class IdentityBuilderExtensions
 
         builder.Services.AddSingleton<MartenStoreRegistration<TUser>>();
         builder.Services.ConfigureMarten((serviceProvider, options) =>
-        {
-            var identityOptions = serviceProvider.GetRequiredService<IOptions<IdentityOptions>>().Value;
-            var mapping = options.Schema.For<TUser>();
+            MartenIdentitySchema.ConfigureUser<TUser>(
+                options,
+                serviceProvider.GetRequiredService<IOptions<IdentityOptions>>().Value.User.RequireUniqueEmail));
 
-            mapping.DocumentAlias(UserDocumentAlias);
-            mapping.UseOptimisticConcurrency(true);
-            mapping.UniqueIndex(NormalizedUserNameIndex, user => user.NormalizedUserName!);
-
-            if (identityOptions.User.RequireUniqueEmail)
-            {
-                mapping.UniqueIndex(UniqueNormalizedEmailIndex, user => user.NormalizedEmail!);
-            }
-            else
-            {
-                mapping.Index(user => user.NormalizedEmail!, index => index.Name = NormalizedEmailIndex);
-            }
-        });
-
+        builder.Services.RemoveAll<IUserStore<TUser>>();
         builder.Services.AddScoped<IUserStore<TUser>, MartenUserOnlyStore<TUser>>();
+        builder.Services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IUserValidator<TUser>, MartenPendingUserChangesValidator<TUser>>());
+        return builder;
+    }
+
+    private static IdentityBuilder AddMartenStoresForUserAndRole<TUser, TRole>(IdentityBuilder builder)
+        where TUser : MartenIdentityUser
+        where TRole : MartenIdentityRole
+    {
+        if (!builder.Services.Any(descriptor => descriptor.ServiceType == typeof(MartenStoreRegistration<TUser>)))
+        {
+            builder.Services.AddSingleton<MartenStoreRegistration<TUser>>();
+            builder.Services.ConfigureMarten((serviceProvider, options) =>
+                MartenIdentitySchema.ConfigureUser<TUser>(
+                    options,
+                    serviceProvider.GetRequiredService<IOptions<IdentityOptions>>().Value.User.RequireUniqueEmail));
+        }
+
+        if (!builder.Services.Any(descriptor => descriptor.ServiceType == typeof(MartenRoleStoreRegistration<TUser, TRole>)))
+        {
+            builder.Services.AddSingleton<MartenRoleStoreRegistration<TUser, TRole>>();
+            builder.Services.ConfigureMarten(options => MartenIdentitySchema.ConfigureRoles<TUser, TRole>(options));
+        }
+
+        builder.Services.RemoveAll<IUserStore<TUser>>();
+        builder.Services.AddScoped<IUserStore<TUser>, MartenUserStore<TUser, TRole>>();
+        builder.Services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IUserValidator<TUser>, MartenPendingUserChangesValidator<TUser>>());
+        builder.Services.RemoveAll<IRoleStore<TRole>>();
+        builder.Services.AddScoped<IRoleStore<TRole>, MartenRoleStore<TRole>>();
+        builder.Services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IRoleValidator<TRole>, MartenPendingRoleChangesValidator<TRole>>());
         return builder;
     }
 
     private sealed class MartenStoreRegistration<TUser>
         where TUser : MartenIdentityUser;
+
+    private sealed class MartenRoleStoreRegistration<TUser, TRole>
+        where TUser : MartenIdentityUser
+        where TRole : MartenIdentityRole;
 }

@@ -10,7 +10,7 @@ namespace Innovorium.AspNetCore.Identity.Marten;
 /// Stores the core ASP.NET Core Identity user account state in a package-owned Marten session.
 /// </summary>
 /// <typeparam name="TUser">The application user document type.</typeparam>
-public sealed class MartenUserOnlyStore<TUser> :
+public partial class MartenUserOnlyStore<TUser> :
     IUserStore<TUser>,
     IQueryableUserStore<TUser>,
     IUserPasswordStore<TUser>,
@@ -23,7 +23,9 @@ public sealed class MartenUserOnlyStore<TUser> :
 {
     private readonly IDocumentStore _documentStore;
     private readonly IdentityErrorDescriber _errorDescriber;
+    private readonly MartenIdentityPendingChanges<TUser> _pendingChanges = new();
     private IDocumentSession _session;
+    private readonly bool _rolesEnabled;
     private bool _disposed;
 
     /// <summary>
@@ -36,6 +38,15 @@ public sealed class MartenUserOnlyStore<TUser> :
         IDocumentStore documentStore,
         IOptions<IdentityOptions> options,
         IdentityErrorDescriber errorDescriber)
+        : this(documentStore, options, errorDescriber, rolesEnabled: false)
+    {
+    }
+
+    internal MartenUserOnlyStore(
+        IDocumentStore documentStore,
+        IOptions<IdentityOptions> options,
+        IdentityErrorDescriber errorDescriber,
+        bool rolesEnabled)
     {
         ArgumentNullException.ThrowIfNull(documentStore);
         ArgumentNullException.ThrowIfNull(options);
@@ -58,6 +69,7 @@ public sealed class MartenUserOnlyStore<TUser> :
 
         _documentStore = documentStore;
         _errorDescriber = errorDescriber;
+        _rolesEnabled = rolesEnabled;
         _session = documentStore.LightweightSession();
     }
 
@@ -78,6 +90,7 @@ public sealed class MartenUserOnlyStore<TUser> :
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
 
+        _pendingChanges.Clear();
         _session.Insert(user);
         return await SaveAsync(user, cancellationToken).ConfigureAwait(false);
     }
@@ -89,8 +102,18 @@ public sealed class MartenUserOnlyStore<TUser> :
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
 
-        user.ConcurrencyStamp = Guid.NewGuid().ToString();
-        _session.Update(user);
+        try
+        {
+            _pendingChanges.Materialize(_session, user);
+            user.ConcurrencyStamp = Guid.NewGuid().ToString();
+            _session.Update(user);
+        }
+        catch
+        {
+            ResetSession();
+            throw;
+        }
+
         return await SaveAsync(user, cancellationToken).ConfigureAwait(false);
     }
 
@@ -101,15 +124,36 @@ public sealed class MartenUserOnlyStore<TUser> :
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
 
+        _pendingChanges.Clear();
         var mapping = _documentStore.Options.FindOrResolveDocumentType(typeof(TUser));
-        var commandText = $"delete from {mapping.TableName.QualifiedName} " +
-                          $"where id = ? and {mapping.Metadata.Version.Name} = ?";
+        var relationships = new List<Type>
+        {
+            typeof(MartenIdentityUserClaim<TUser>),
+            typeof(MartenIdentityUserLogin<TUser>),
+            typeof(MartenIdentityUserToken<TUser>),
+            typeof(MartenIdentityUserPasskey<TUser>),
+        };
+        if (_rolesEnabled)
+        {
+            relationships.Add(typeof(MartenIdentityUserRole));
+        }
+
+        var cleanupCommands = relationships.Select((type, index) =>
+        {
+            var relationship = _documentStore.Options.FindOrResolveDocumentType(type);
+            return $"deleted_{index} as (delete from {relationship.TableName.QualifiedName} " +
+                   $"where {MartenIdentitySchema.UserIdColumn} in (select id from deleted_user))";
+        });
+        var commandText = $"with deleted_user as (delete from {mapping.TableName.QualifiedName} " +
+                          $"where id = ? and {mapping.Metadata.Version.Name} = ? returning id, data), " +
+                          string.Join(", ", cleanupCommands) +
+                          " select data from deleted_user";
         object[] parameters = [user.Id, user.Version];
 
         try
         {
             var deleted = await _session.QueryAsync<TUser>(
-                $"with deleted as ({commandText} returning data) select data from deleted",
+                commandText,
                 cancellationToken,
                 parameters).ConfigureAwait(false);
 
@@ -439,7 +483,9 @@ public sealed class MartenUserOnlyStore<TUser> :
         }
 
         _session.Dispose();
+        _pendingChanges.Clear();
         _disposed = true;
+        GC.SuppressFinalize(this);
     }
 
     private async Task<IdentityResult> SaveAsync(TUser user, CancellationToken cancellationToken)
@@ -447,19 +493,20 @@ public sealed class MartenUserOnlyStore<TUser> :
         try
         {
             await _session.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _pendingChanges.Clear();
             return IdentityResult.Success;
         }
-        catch (Exception exception) when (IsConcurrencyFailure(exception))
+        catch (Exception exception) when (MartenIdentityPersistenceErrors.IsConcurrencyFailure(exception))
         {
             ResetSession();
             return IdentityResult.Failed(_errorDescriber.ConcurrencyFailure());
         }
-        catch (Exception exception) when (FindUniqueConstraint(exception) is
+        catch (Exception exception) when (MartenIdentityPersistenceErrors.FindUniqueConstraint(exception) is
             IdentityBuilderExtensions.NormalizedUserNameIndex or
             IdentityBuilderExtensions.UniqueNormalizedEmailIndex)
         {
             ResetSession();
-            var constraint = FindUniqueConstraint(exception);
+            var constraint = MartenIdentityPersistenceErrors.FindUniqueConstraint(exception);
 
             return constraint switch
             {
@@ -470,6 +517,17 @@ public sealed class MartenUserOnlyStore<TUser> :
                 _ => throw new InvalidOperationException("An expected Identity constraint was not found.", exception),
             };
         }
+        catch (Exception exception) when (
+            MartenIdentityPersistenceErrors.FindForeignKeyConstraint(exception) ==
+            MartenIdentitySchema.UserRoleRoleForeignKey)
+        {
+            ResetSession();
+            return IdentityResult.Failed(new IdentityError
+            {
+                Code = "RoleNotFound",
+                Description = "The role no longer exists.",
+            });
+        }
         catch
         {
             ResetSession();
@@ -477,61 +535,29 @@ public sealed class MartenUserOnlyStore<TUser> :
         }
     }
 
-    private static bool IsConcurrencyFailure(Exception exception) =>
-        Traverse(exception).Any(current => current.GetType().FullName is
-            "JasperFx.ConcurrencyException" or
-            "Marten.Exceptions.ConcurrentUpdateException");
-
-    private static string? FindUniqueConstraint(Exception exception)
-    {
-        foreach (var current in Traverse(exception))
-        {
-            if (current.GetType().FullName != "Npgsql.PostgresException")
-            {
-                continue;
-            }
-
-            var sqlState = current.GetType().GetProperty("SqlState")?.GetValue(current) as string;
-            if (!string.Equals(sqlState, "23505", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            return current.GetType().GetProperty("ConstraintName")?.GetValue(current) as string;
-        }
-
-        return null;
-    }
-
-    private static IEnumerable<Exception> Traverse(Exception exception)
-    {
-        var pending = new Stack<Exception>();
-        pending.Push(exception);
-
-        while (pending.TryPop(out var current))
-        {
-            yield return current;
-
-            if (current is AggregateException aggregate)
-            {
-                foreach (var inner in aggregate.InnerExceptions)
-                {
-                    pending.Push(inner);
-                }
-            }
-            else if (current.InnerException is { } inner)
-            {
-                pending.Push(inner);
-            }
-        }
-    }
-
     private void ResetSession()
     {
+        _pendingChanges.Clear();
         _session.Dispose();
         _session = _documentStore.LightweightSession();
     }
 
     private void ThrowIfDisposed() =>
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+    internal IDocumentSession Session => _session;
+
+    internal void BeginPendingChanges(
+        TUser user,
+        MartenIdentityPendingChangeKind kind = MartenIdentityPendingChangeKind.Relationship) =>
+        _pendingChanges.Begin(user, kind);
+
+    internal void AddPendingChange(Action<IDocumentSession> operation) => _pendingChanges.Add(operation);
+
+    internal bool HasPendingChanges(TUser user, MartenIdentityPendingChangeKind kind) =>
+        _pendingChanges.IsFor(user, kind);
+
+    internal void DiscardPendingChanges() => _pendingChanges.Clear();
+
+    internal void ThrowIfStoreDisposed() => ThrowIfDisposed();
 }

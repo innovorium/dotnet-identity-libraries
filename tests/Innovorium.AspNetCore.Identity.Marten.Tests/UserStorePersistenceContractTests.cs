@@ -60,8 +60,13 @@ public sealed class UserStorePersistenceContractTests
         var sql = Assert.IsType<string>(invocation.Arguments[0]);
         var parameters = Assert.IsType<object[]>(invocation.Arguments[2]);
         Assert.Contains("where id = ? and mt_version = ?", sql, StringComparison.Ordinal);
-        Assert.StartsWith("with deleted as (delete from ", sql, StringComparison.Ordinal);
-        Assert.EndsWith("returning data) select data from deleted", sql, StringComparison.Ordinal);
+        Assert.StartsWith("with deleted_user as (delete from ", sql, StringComparison.Ordinal);
+        Assert.Contains("mt_doc_identity_user_claim", sql, StringComparison.Ordinal);
+        Assert.Contains("mt_doc_identity_user_login", sql, StringComparison.Ordinal);
+        Assert.Contains("mt_doc_identity_user_token", sql, StringComparison.Ordinal);
+        Assert.Contains("mt_doc_identity_user_passkey", sql, StringComparison.Ordinal);
+        Assert.Contains("where user_id in (select id from deleted_user)", sql, StringComparison.Ordinal);
+        Assert.EndsWith("select data from deleted_user", sql, StringComparison.Ordinal);
         Assert.Equal([user.Id, user.Version], parameters);
     }
 
@@ -149,7 +154,7 @@ public sealed class UserStorePersistenceContractTests
             {
                 options.Connection(
                     "Host=127.0.0.1;Port=1;Database=identity_tests;Username=identity_tests;Password=identity_tests");
-                options.Schema.For<ApplicationUser>().DocumentAlias("identity_user");
+                MartenIdentitySchema.ConfigureUser<ApplicationUser>(options, requireUniqueEmail: false);
             });
             var session = DispatchProxy.Create<IDocumentSession, RecordingProxy>();
             Session = (RecordingProxy)(object)session;
