@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Innovorium.OpenIddict.Marten</PackageId>
+    <Description>Marten persistence for OpenIddict on .NET 10.</Description>
+    <RootNamespace>Innovorium.OpenIddict.Marten</RootNamespace>
+    <AssemblyName>Innovorium.OpenIddict.Marten</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Marten" />
+    <PackageReference Include="OpenIddict.Core" />
+  </ItemGroup>
+</Project>

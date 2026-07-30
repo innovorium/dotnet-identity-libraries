@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Innovorium.AspNetCore.Identity.Marten/Innovorium.AspNetCore.Identity.Marten.csproj" />
+    <Project Path="src/Innovorium.OpenIddict.Marten/Innovorium.OpenIddict.Marten.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Innovorium.AspNetCore.Identity.Marten.Tests/Innovorium.AspNetCore.Identity.Marten.Tests.csproj" />
+    <Project Path="tests/Innovorium.OpenIddict.Marten.Tests/Innovorium.OpenIddict.Marten.Tests.csproj" />
+  </Folder>
+</Solution>

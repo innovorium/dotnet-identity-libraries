@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Innovorium.AspNetCore.Identity.Marten</PackageId>
+    <Description>Marten persistence for ASP.NET Core Identity on .NET 10.</Description>
+    <RootNamespace>Innovorium.AspNetCore.Identity.Marten</RootNamespace>
+    <AssemblyName>Innovorium.AspNetCore.Identity.Marten</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Marten" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Stores" />
+  </ItemGroup>
+</Project>
