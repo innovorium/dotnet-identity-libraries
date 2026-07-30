@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible defect
+title: "[Bug]: "
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: Do not disclose vulnerabilities here. Follow SECURITY.md instead.
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - Innovorium.AspNetCore.Identity.Marten
+        - Innovorium.OpenIddict.Marten
+        - Repository tooling or documentation
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Package, .NET, Marten, OpenIddict, and PostgreSQL versions as applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide the smallest safe example and exact observed behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
