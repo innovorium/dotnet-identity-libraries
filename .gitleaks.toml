@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Generated dependency and build outputs"
+paths = [
+  '''(^|/)\.packages/''',
+  '''(^|/)(artifacts|bin|obj)/'''
+]
