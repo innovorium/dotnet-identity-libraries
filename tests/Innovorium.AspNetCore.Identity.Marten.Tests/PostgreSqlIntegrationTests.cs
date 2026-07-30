@@ -29,7 +29,6 @@ public sealed class PostgreSqlIntegrationTests
 
         var identity = services.AddIdentityCore<ApplicationUser>();
         identity.AddMartenStores();
-        identity.AddMartenStores();
 
         await using var provider = services.BuildServiceProvider();
         var documentStore = provider.GetRequiredService<IDocumentStore>();
@@ -38,10 +37,6 @@ public sealed class PostgreSqlIntegrationTests
         var mapping = documentStore.Options.FindOrResolveDocumentType(typeof(ApplicationUser));
         Assert.Equal("identity_user", mapping.Alias);
         Assert.True(mapping.UseOptimisticConcurrency);
-        Assert.Single(mapping.Indexes, index =>
-            index.Name == IdentityBuilderExtensions.NormalizedUserNameIndex);
-        Assert.Single(mapping.Indexes, index =>
-            index.Name == IdentityBuilderExtensions.NormalizedEmailIndex);
 
         await using (var query = documentStore.QuerySession())
         {

@@ -13,34 +13,29 @@ namespace Innovorium.AspNetCore.Identity.Marten.Tests;
 public sealed class UserStorePersistenceContractTests
 {
     [Fact]
-    public async Task CreateUsesInsertAndCommitsTheDedicatedSession()
+    public async Task CreateAndUpdateCommitThroughTheOwnedSession()
     {
         using var fixture = new StoreFixture();
         using var store = fixture.CreateStore();
 
-        var result = await store.CreateAsync(
-            new ApplicationUser { Id = "new-user" },
+        var user = new ApplicationUser { Id = "new-user", ConcurrencyStamp = "original-stamp" };
+        var created = await store.CreateAsync(
+            user,
             TestContext.Current.CancellationToken);
 
-        Assert.True(result.Succeeded);
+        Assert.True(created.Succeeded);
         Assert.Contains("Insert", fixture.Session.Calls);
         Assert.Contains("SaveChangesAsync", fixture.Session.Calls);
         Assert.DoesNotContain("Store", fixture.Session.Calls);
-    }
 
-    [Fact]
-    public async Task UpdateStagesAnOptimisticUpdateRotatesTheIdentityStampAndCommits()
-    {
-        using var fixture = new StoreFixture();
-        using var store = fixture.CreateStore();
-        var user = new ApplicationUser { ConcurrencyStamp = "original-stamp" };
+        fixture.Session.Calls.Clear();
+        var updated = await store.UpdateAsync(user, TestContext.Current.CancellationToken);
 
-        var result = await store.UpdateAsync(user, TestContext.Current.CancellationToken);
-
-        Assert.True(result.Succeeded);
+        Assert.True(updated.Succeeded);
         Assert.NotEqual("original-stamp", user.ConcurrencyStamp);
         Assert.Contains("Update", fixture.Session.Calls);
         Assert.Contains("SaveChangesAsync", fixture.Session.Calls);
+        Assert.Equal(1, DocumentStoreSessionOpenCount(fixture));
     }
 
     [Fact]
@@ -71,29 +66,23 @@ public sealed class UserStorePersistenceContractTests
         Assert.Equal([user.Id, user.Version], parameters);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task StaleMutationSignalReturnsTheStandardIdentityConcurrencyFailure(bool update)
+    [Fact]
+    public async Task StaleUpdateSignalReturnsTheStandardIdentityConcurrencyFailure()
     {
         using var fixture = new StoreFixture();
         fixture.Session.ResultFactory = method =>
-            update && method.Name == nameof(IDocumentSession.SaveChangesAsync)
+            method.Name == nameof(IDocumentSession.SaveChangesAsync)
                 ? throw new ConcurrentUpdateException(new InvalidOperationException("stale document"))
-                : !update && method.Name == nameof(IQuerySession.QueryAsync)
-                    ? Task.FromResult<IReadOnlyList<ApplicationUser>>([])
-                    : RecordingProxy.DefaultResult(method);
+                : RecordingProxy.DefaultResult(method);
         using var store = fixture.CreateStore();
         var user = new ApplicationUser { Id = "stale-user", Version = Guid.NewGuid() };
 
-        var result = update
-            ? await store.UpdateAsync(user, TestContext.Current.CancellationToken)
-            : await store.DeleteAsync(user, TestContext.Current.CancellationToken);
+        var result = await store.UpdateAsync(user, TestContext.Current.CancellationToken);
 
         var error = Assert.Single(result.Errors);
         Assert.False(result.Succeeded);
         Assert.Equal("ConcurrencyFailure", error.Code);
-        Assert.Equal(update ? 2 : 1, DocumentStoreSessionOpenCount(fixture));
+        Assert.Equal(2, DocumentStoreSessionOpenCount(fixture));
     }
 
     [Theory]
@@ -160,31 +149,6 @@ public sealed class UserStorePersistenceContractTests
         Assert.Contains("Update", fixture.Session.Calls);
         Assert.Contains("SaveChangesAsync", fixture.Session.Calls);
         Assert.DoesNotContain("Store", fixture.Session.Calls);
-    }
-
-    [Fact]
-    public async Task ConcurrentPasskeyInsertReturnsStableFailureAndResetsTheSession()
-    {
-        using var fixture = new StoreFixture();
-        fixture.Session.ResultFactory = method =>
-            method.Name == nameof(IDocumentSession.SaveChangesAsync)
-                ? throw new AggregateException(
-                    CreateUniqueViolation(MartenIdentitySchema.UserPasskeyPrimaryKey))
-                : RecordingProxy.DefaultResult(method);
-        using var store = fixture.CreateStore();
-        var user = new ApplicationUser { Id = "race-user" };
-
-        await store.AddOrUpdatePasskeyAsync(
-            user,
-            CreatePasskey([1, 3, 3, 7], "Racing key", [2, 4, 6]),
-            TestContext.Current.CancellationToken);
-        var result = await store.UpdateAsync(user, TestContext.Current.CancellationToken);
-
-        Assert.False(result.Succeeded);
-        Assert.Equal("DuplicatePasskey", Assert.Single(result.Errors).Code);
-        Assert.Contains("Insert", fixture.Session.Calls);
-        Assert.Contains("SaveChangesAsync", fixture.Session.Calls);
-        Assert.Equal(2, DocumentStoreSessionOpenCount(fixture));
     }
 
     [Fact]

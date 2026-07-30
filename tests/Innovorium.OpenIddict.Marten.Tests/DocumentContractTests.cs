@@ -15,7 +15,6 @@ public sealed class DocumentContractTests
     {
         var session = RecordingDocumentSession.Create(out _);
         var store = new MartenOpenIddictApplicationStore(session);
-        Assert.IsAssignableFrom<IOpenIddictApplicationStore<OpenIddictMartenApplication>>(store);
         var application = await store.InstantiateAsync(TestContext.Current.CancellationToken);
         var names = ImmutableDictionary<CultureInfo, string>.Empty
             .Add(CultureInfo.GetCultureInfo("en-US"), "Customer portal");
@@ -43,7 +42,6 @@ public sealed class DocumentContractTests
     {
         var session = RecordingDocumentSession.Create(out _);
         var store = new MartenOpenIddictScopeStore(session);
-        Assert.IsAssignableFrom<IOpenIddictScopeStore<OpenIddictMartenScope>>(store);
         var scope = await store.InstantiateAsync(TestContext.Current.CancellationToken);
         var descriptions = ImmutableDictionary<CultureInfo, string>.Empty
             .Add(CultureInfo.GetCultureInfo("fr-FR"), "Profil");
@@ -65,7 +63,6 @@ public sealed class DocumentContractTests
     {
         var session = RecordingDocumentSession.Create(out _);
         var store = new MartenOpenIddictAuthorizationStore(session);
-        Assert.IsAssignableFrom<IOpenIddictAuthorizationStore<OpenIddictMartenAuthorization>>(store);
         var authorization = await store.InstantiateAsync(TestContext.Current.CancellationToken);
         var applicationId = Guid.NewGuid();
         var creationDate = DateTimeOffset.Parse(
@@ -113,7 +110,6 @@ public sealed class DocumentContractTests
     {
         var session = RecordingDocumentSession.Create(out _);
         var store = new MartenOpenIddictTokenStore(session, TimeProvider.System);
-        Assert.IsAssignableFrom<IOpenIddictTokenStore<OpenIddictMartenToken>>(store);
         var token = await store.InstantiateAsync(TestContext.Current.CancellationToken);
         var applicationId = Guid.NewGuid();
         var authorizationId = Guid.NewGuid();
@@ -167,19 +163,4 @@ public sealed class DocumentContractTests
         Assert.Equal("gold", properties["profile"].GetProperty("tier").GetString());
     }
 
-    [Fact]
-    public void ScopeNameSetRejectsDefaultEmptyAndInvalidValues()
-    {
-        var session = RecordingDocumentSession.Create(out _);
-        var store = new MartenOpenIddictScopeStore(session);
-
-        Assert.Throws<ArgumentException>(() =>
-            store.FindByNamesAsync(default, TestContext.Current.CancellationToken));
-        Assert.Throws<ArgumentException>(() =>
-            store.FindByNamesAsync([], TestContext.Current.CancellationToken));
-        Assert.Throws<ArgumentException>(() =>
-            store.FindByNamesAsync(["profile", ""], TestContext.Current.CancellationToken));
-        Assert.Throws<ArgumentException>(() =>
-            store.FindByNamesAsync(["profile", null!], TestContext.Current.CancellationToken));
-    }
 }

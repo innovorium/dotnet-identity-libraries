@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using JasperFx;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using OpenIddict.Abstractions;
 using Xunit;
 
@@ -18,28 +19,61 @@ public sealed class OpenIddictProviderIntegrationTests
     [Fact(
         Skip = "Set INNOVORIUM_TEST_POSTGRES to run the disposable PostgreSQL integration test.",
         SkipUnless = nameof(HasPostgreSql))]
-    public async Task CustomerManagersSupportAuthorizationAndTokenCrudAndAllLookups()
+    public async Task CustomerManagersSupportAllFourStoresLookupsAndUniqueness()
     {
         await using var provider = await CreateProviderAsync();
         await using var scope = provider.CreateAsyncScope();
         var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
         var authorizations = scope.ServiceProvider.GetRequiredService<IOpenIddictAuthorizationManager>();
+        var scopes = scope.ServiceProvider.GetRequiredService<IOpenIddictScopeManager>();
         var tokens = scope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>();
+        var applicationStore = scope.ServiceProvider.GetRequiredService<
+            IOpenIddictApplicationStore<OpenIddictMartenApplication>>();
         var authorizationStore = scope.ServiceProvider.GetRequiredService<
             IOpenIddictAuthorizationStore<OpenIddictMartenAuthorization>>();
         var tokenStore = scope.ServiceProvider.GetRequiredService<
             IOpenIddictTokenStore<OpenIddictMartenToken>>();
+        var scopeStore = scope.ServiceProvider.GetRequiredService<
+            IOpenIddictScopeStore<OpenIddictMartenScope>>();
         var suffix = Guid.NewGuid().ToString("N");
+        var clientId = $"manager-client-{suffix}";
+        var scopeName = $"profile-{suffix}";
+        var redirectUri = $"https://customer.example.test/callback/{suffix}";
+        var resource = $"customer-api-{suffix}";
 
         var application = await applications.CreateAsync(new OpenIddictApplicationDescriptor
         {
-            ClientId = $"manager-client-{suffix}",
+            ClientId = clientId,
             ClientType = OpenIddictConstants.ClientTypes.Public,
             DisplayName = "Manager client",
+            RedirectUris = { new Uri(redirectUri) },
         }, TestContext.Current.CancellationToken);
         var applicationId = Assert.IsType<string>(await applications.GetIdAsync(
             application,
             TestContext.Current.CancellationToken));
+        await scopes.CreateAsync(new OpenIddictScopeDescriptor
+        {
+            Name = scopeName,
+            DisplayName = "Customer profile",
+            Resources = { resource },
+        }, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(await applications.FindByClientIdAsync(clientId, TestContext.Current.CancellationToken));
+        Assert.NotNull(await scopes.FindByNameAsync(scopeName, TestContext.Current.CancellationToken));
+        Assert.Single(await applicationStore.FindByRedirectUriAsync(
+            redirectUri,
+            TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Single(await scopeStore.FindByNamesAsync(
+            [scopeName],
+            TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Single(await scopeStore.FindByResourceAsync(
+            resource,
+            TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken));
+
+        var duplicate = new OpenIddictMartenApplication { ClientId = clientId };
+        var uniqueViolation = await Assert.ThrowsAnyAsync<Exception>(async () =>
+            await applicationStore.CreateAsync(duplicate, TestContext.Current.CancellationToken));
+        Assert.True(ContainsPostgreSqlUniqueViolation(uniqueViolation));
 
         var authorization = await authorizations.CreateAsync(new OpenIddictAuthorizationDescriptor
         {
@@ -123,9 +157,11 @@ public sealed class OpenIddictProviderIntegrationTests
     [Fact(
         Skip = "Set INNOVORIUM_TEST_POSTGRES to run the disposable PostgreSQL integration test.",
         SkipUnless = nameof(HasPostgreSql))]
-    public async Task AuthorizationAndTokenConcurrencyAndCascadesAreEnforcedByPostgreSql()
+    public async Task AllStoresRejectStaleAndMissingMutationsAndCascadesReadFreshState()
     {
         await using var provider = await CreateProviderAsync();
+        await VerifyApplicationConcurrencyAsync(provider);
+        await VerifyScopeConcurrencyAsync(provider);
         var application = new OpenIddictMartenApplication
         {
             ClientId = $"cascade-client-{Guid.NewGuid():N}",
@@ -397,23 +433,33 @@ public sealed class OpenIddictProviderIntegrationTests
     [Fact(
         Skip = "Set INNOVORIUM_TEST_POSTGRES to run the disposable PostgreSQL integration test.",
         SkipUnless = nameof(HasPostgreSql))]
-    public async Task PruneProcessesMultipleBoundedBatchesAndReturnsTheExactTotal()
+    public async Task MaintenanceProcessesMultipleBoundedBatchesAndReturnsExactTotals()
     {
         var now = new DateTimeOffset(2030, 7, 30, 10, 0, 0, TimeSpan.Zero);
         await using var provider = await CreateProviderAsync(new FixedTimeProvider(now));
         await using (var insertScope = provider.CreateAsyncScope())
         {
             var session = insertScope.ServiceProvider.GetRequiredService<IDocumentSession>();
-            var tokens = Enumerable.Range(0, MartenOpenIddictBulkOperations.BatchSize + 1)
+            var pruneTokens = Enumerable.Range(0, MartenOpenIddictBulkOperations.BatchSize + 1)
                 .Select(index => new OpenIddictMartenToken
                 {
                     CreationDate = now.AddYears(-2),
                     Status = OpenIddictConstants.Statuses.Revoked,
-                    Subject = $"batch-{index}",
+                    Subject = $"prune-batch-{index}",
                     Type = OpenIddictConstants.TokenTypeHints.AccessToken,
                 })
                 .ToArray();
-            session.Insert(tokens);
+            var revokeTokens = Enumerable.Range(0, MartenOpenIddictBulkOperations.BatchSize + 1)
+                .Select(_ => new OpenIddictMartenToken
+                {
+                    CreationDate = now.AddYears(-2),
+                    ExpirationDate = now.AddHours(1),
+                    Status = OpenIddictConstants.Statuses.Valid,
+                    Subject = "revoke-batch",
+                    Type = OpenIddictConstants.TokenTypeHints.AccessToken,
+                })
+                .ToArray();
+            session.Insert(pruneTokens.Concat(revokeTokens));
             await session.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -422,6 +468,9 @@ public sealed class OpenIddictProviderIntegrationTests
             IOpenIddictTokenStore<OpenIddictMartenToken>>();
         Assert.Equal(
             MartenOpenIddictBulkOperations.BatchSize + 1,
+            await store.RevokeBySubjectAsync("revoke-batch", TestContext.Current.CancellationToken));
+        Assert.Equal(
+            (MartenOpenIddictBulkOperations.BatchSize + 1) * 2,
             await store.PruneAsync(now.AddYears(-1), TestContext.Current.CancellationToken));
         Assert.Equal(0, await store.CountAsync(TestContext.Current.CancellationToken));
     }
@@ -575,6 +624,112 @@ public sealed class OpenIddictProviderIntegrationTests
             Type = OpenIddictConstants.TokenTypeHints.AccessToken,
         };
 
+    private static async Task VerifyApplicationConcurrencyAsync(ServiceProvider provider)
+    {
+        var application = new OpenIddictMartenApplication
+        {
+            ClientId = $"concurrency-client-{Guid.NewGuid():N}",
+            DisplayName = "Before",
+        };
+        await using (var createScope = provider.CreateAsyncScope())
+        {
+            await createScope.ServiceProvider.GetRequiredService<
+                IOpenIddictApplicationStore<OpenIddictMartenApplication>>()
+                .CreateAsync(application, TestContext.Current.CancellationToken);
+        }
+
+        await using var staleScope = provider.CreateAsyncScope();
+        await using var currentScope = provider.CreateAsyncScope();
+        var staleStore = staleScope.ServiceProvider.GetRequiredService<
+            IOpenIddictApplicationStore<OpenIddictMartenApplication>>();
+        var currentStore = currentScope.ServiceProvider.GetRequiredService<
+            IOpenIddictApplicationStore<OpenIddictMartenApplication>>();
+        var stale = Assert.IsType<OpenIddictMartenApplication>(await staleStore.FindByIdAsync(
+            application.Id.ToString("D"),
+            TestContext.Current.CancellationToken));
+        var current = Assert.IsType<OpenIddictMartenApplication>(await currentStore.FindByIdAsync(
+            application.Id.ToString("D"),
+            TestContext.Current.CancellationToken));
+
+        current.DisplayName = "Current";
+        await currentStore.UpdateAsync(current, TestContext.Current.CancellationToken);
+        stale.DisplayName = "Stale";
+        await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+            await staleStore.UpdateAsync(stale, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+            await staleStore.DeleteAsync(stale, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+            await currentStore.UpdateAsync(
+                new OpenIddictMartenApplication { Id = Guid.NewGuid(), Version = 1 },
+                TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+            await currentStore.DeleteAsync(
+                new OpenIddictMartenApplication { Id = Guid.NewGuid(), Version = 1 },
+                TestContext.Current.CancellationToken));
+
+        await using var verificationScope = provider.CreateAsyncScope();
+        var verificationStore = verificationScope.ServiceProvider.GetRequiredService<
+            IOpenIddictApplicationStore<OpenIddictMartenApplication>>();
+        var survivor = Assert.IsType<OpenIddictMartenApplication>(await verificationStore.FindByIdAsync(
+            application.Id.ToString("D"),
+            TestContext.Current.CancellationToken));
+        Assert.Equal("Current", survivor.DisplayName);
+        Assert.True(survivor.Version > stale.Version);
+    }
+
+    private static async Task VerifyScopeConcurrencyAsync(ServiceProvider provider)
+    {
+        var persistedScope = new OpenIddictMartenScope
+        {
+            Name = $"concurrency-scope-{Guid.NewGuid():N}",
+            DisplayName = "Before",
+        };
+        await using (var createScope = provider.CreateAsyncScope())
+        {
+            await createScope.ServiceProvider.GetRequiredService<
+                IOpenIddictScopeStore<OpenIddictMartenScope>>()
+                .CreateAsync(persistedScope, TestContext.Current.CancellationToken);
+        }
+
+        await using var staleScope = provider.CreateAsyncScope();
+        await using var currentScope = provider.CreateAsyncScope();
+        var staleStore = staleScope.ServiceProvider.GetRequiredService<
+            IOpenIddictScopeStore<OpenIddictMartenScope>>();
+        var currentStore = currentScope.ServiceProvider.GetRequiredService<
+            IOpenIddictScopeStore<OpenIddictMartenScope>>();
+        var stale = Assert.IsType<OpenIddictMartenScope>(await staleStore.FindByIdAsync(
+            persistedScope.Id.ToString("D"),
+            TestContext.Current.CancellationToken));
+        var current = Assert.IsType<OpenIddictMartenScope>(await currentStore.FindByIdAsync(
+            persistedScope.Id.ToString("D"),
+            TestContext.Current.CancellationToken));
+
+        current.DisplayName = "Current";
+        await currentStore.UpdateAsync(current, TestContext.Current.CancellationToken);
+        stale.DisplayName = "Stale";
+        await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+            await staleStore.UpdateAsync(stale, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+            await staleStore.DeleteAsync(stale, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+            await currentStore.UpdateAsync(
+                new OpenIddictMartenScope { Id = Guid.NewGuid(), Version = 1 },
+                TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+            await currentStore.DeleteAsync(
+                new OpenIddictMartenScope { Id = Guid.NewGuid(), Version = 1 },
+                TestContext.Current.CancellationToken));
+
+        await using var verificationScope = provider.CreateAsyncScope();
+        var verificationStore = verificationScope.ServiceProvider.GetRequiredService<
+            IOpenIddictScopeStore<OpenIddictMartenScope>>();
+        var survivor = Assert.IsType<OpenIddictMartenScope>(await verificationStore.FindByIdAsync(
+            persistedScope.Id.ToString("D"),
+            TestContext.Current.CancellationToken));
+        Assert.Equal("Current", survivor.DisplayName);
+        Assert.True(survivor.Version > stale.Version);
+    }
+
     private static async Task InsertGraphAsync(
         ServiceProvider provider,
         OpenIddictMartenApplication application,
@@ -610,6 +765,23 @@ public sealed class OpenIddictProviderIntegrationTests
         await provider.GetRequiredService<IDocumentStore>()
             .Storage.ApplyAllConfiguredChangesToDatabaseAsync();
         return provider;
+    }
+
+    private static bool ContainsPostgreSqlUniqueViolation(Exception exception)
+    {
+        if (exception is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            return true;
+        }
+
+        if (exception is AggregateException aggregate &&
+            aggregate.InnerExceptions.Any(ContainsPostgreSqlUniqueViolation))
+        {
+            return true;
+        }
+
+        return exception.InnerException is not null &&
+            ContainsPostgreSqlUniqueViolation(exception.InnerException);
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

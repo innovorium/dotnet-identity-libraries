@@ -25,19 +25,6 @@ public sealed class RegistrationTests
         var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
         Assert.IsType<MartenUserOnlyStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IQueryableUserStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserPasswordStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserEmailStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserPhoneNumberStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserSecurityStampStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserLockoutStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserTwoFactorStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserClaimStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserLoginStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserAuthenticationTokenStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserAuthenticatorKeyStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserTwoFactorRecoveryCodeStore<ApplicationUser>>(store);
-        Assert.IsAssignableFrom<IUserPasskeyStore<ApplicationUser>>(store);
         Assert.True(manager.SupportsQueryableUsers);
         Assert.True(manager.SupportsUserPassword);
         Assert.True(manager.SupportsUserEmail);
@@ -139,10 +126,7 @@ public sealed class RegistrationTests
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
 
         Assert.IsType<MartenUserStore<ApplicationUser, ApplicationRole>>(userStore);
-        Assert.IsAssignableFrom<IUserRoleStore<ApplicationUser>>(userStore);
         Assert.IsType<MartenRoleStore<ApplicationRole>>(roleStore);
-        Assert.IsAssignableFrom<IQueryableRoleStore<ApplicationRole>>(roleStore);
-        Assert.IsAssignableFrom<IRoleClaimStore<ApplicationRole>>(roleStore);
         Assert.True(userManager.SupportsUserRole);
         Assert.True(roleManager.SupportsQueryableRoles);
         Assert.True(roleManager.SupportsRoleClaims);

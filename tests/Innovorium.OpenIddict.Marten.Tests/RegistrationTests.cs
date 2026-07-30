@@ -11,9 +11,11 @@ namespace Innovorium.OpenIddict.Marten.Tests;
 public sealed class RegistrationTests
 {
     [Fact]
-    public void UseMartenRegistersAllFourStoresAsScoped()
+    public void UseMartenRegistersAndResolvesAllFourScopedStores()
     {
         var services = new ServiceCollection();
+        var documentStore = RecordingDocumentSession.Create(out _);
+        services.AddSingleton(documentStore);
         var builder = new OpenIddictCoreBuilder(services);
 
         var result = builder.UseMarten();
@@ -30,34 +32,6 @@ public sealed class RegistrationTests
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(TimeProvider) &&
             descriptor.Lifetime == ServiceLifetime.Singleton);
-    }
-
-    [Fact]
-    public void UseMartenIsIdempotentForStoreRegistrations()
-    {
-        var services = new ServiceCollection();
-        var builder = new OpenIddictCoreBuilder(services);
-
-        builder.UseMarten();
-        builder.UseMarten();
-
-        Assert.Single(services, descriptor =>
-            descriptor.ServiceType == typeof(IOpenIddictApplicationStore<OpenIddictMartenApplication>));
-        Assert.Single(services, descriptor =>
-            descriptor.ServiceType == typeof(IOpenIddictAuthorizationStore<OpenIddictMartenAuthorization>));
-        Assert.Single(services, descriptor =>
-            descriptor.ServiceType == typeof(IOpenIddictScopeStore<OpenIddictMartenScope>));
-        Assert.Single(services, descriptor =>
-            descriptor.ServiceType == typeof(IOpenIddictTokenStore<OpenIddictMartenToken>));
-    }
-
-    [Fact]
-    public void RegisteredStoresResolveFromTheCustomerScope()
-    {
-        var services = new ServiceCollection();
-        var session = RecordingDocumentSession.Create(out _);
-        services.AddSingleton(session);
-        new OpenIddictCoreBuilder(services).UseMarten();
 
         using var provider = services.BuildServiceProvider(
             new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
@@ -71,6 +45,40 @@ public sealed class RegistrationTests
             IOpenIddictScopeStore<OpenIddictMartenScope>>());
         Assert.IsType<MartenOpenIddictTokenStore>(scope.ServiceProvider.GetRequiredService<
             IOpenIddictTokenStore<OpenIddictMartenToken>>());
+    }
+
+    [Fact]
+    public void RepeatedUseMartenDoesNotDuplicateServicesMappingsOrIndexes()
+    {
+        var services = new ServiceCollection();
+        services.AddMarten(options =>
+            options.Connection("Host=localhost;Database=unused;Username=unused"));
+        var builder = new OpenIddictCoreBuilder(services);
+
+        builder.UseMarten();
+        builder.UseMarten();
+
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IOpenIddictApplicationStore<OpenIddictMartenApplication>));
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IOpenIddictAuthorizationStore<OpenIddictMartenAuthorization>));
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IOpenIddictScopeStore<OpenIddictMartenScope>));
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IOpenIddictTokenStore<OpenIddictMartenToken>));
+
+        using var provider = services.BuildServiceProvider();
+        var ddl = provider.GetRequiredService<IDocumentStore>().Storage.ToDatabaseScript();
+
+        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.ApplicationClientIdIndex));
+        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.ApplicationRedirectUrisIndex));
+        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.AuthorizationApplicationIdIndex));
+        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.AuthorizationScopesIndex));
+        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.ScopeNameIndex));
+        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.ScopeResourcesIndex));
+        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.TokenApplicationIdIndex));
+        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.TokenAuthorizationIdIndex));
+        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.TokenReferenceIdIndex));
     }
 
     [Fact]
@@ -117,30 +125,6 @@ public sealed class RegistrationTests
         Assert.Equal(
             TenancyStyle.Single,
             readOnlyOptions.FindOrResolveDocumentType(typeof(OpenIddictMartenToken)).TenancyStyle);
-    }
-
-    [Fact]
-    public void RepeatedUseMartenDoesNotDuplicateMappingsOrIndexes()
-    {
-        var services = new ServiceCollection();
-        services.AddMarten(options =>
-            options.Connection("Host=localhost;Database=unused;Username=unused"));
-        var builder = new OpenIddictCoreBuilder(services);
-        builder.UseMarten();
-        builder.UseMarten();
-
-        using var provider = services.BuildServiceProvider();
-        var ddl = provider.GetRequiredService<IDocumentStore>().Storage.ToDatabaseScript();
-
-        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.ApplicationClientIdIndex));
-        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.ApplicationRedirectUrisIndex));
-        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.AuthorizationApplicationIdIndex));
-        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.AuthorizationScopesIndex));
-        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.ScopeNameIndex));
-        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.ScopeResourcesIndex));
-        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.TokenApplicationIdIndex));
-        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.TokenAuthorizationIdIndex));
-        Assert.Equal(1, CountOccurrences(ddl, MartenOpenIddictSchema.TokenReferenceIdIndex));
     }
 
     [Fact]

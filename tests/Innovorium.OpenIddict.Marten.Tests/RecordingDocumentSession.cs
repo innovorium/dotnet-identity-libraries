@@ -2,7 +2,6 @@ using System.Data.Common;
 using System.Reflection;
 using Marten;
 using Marten.Services;
-using Npgsql;
 using Weasel.Core;
 using Weasel.Storage;
 
@@ -26,11 +25,6 @@ internal class RecordingDocumentSession : DispatchProxy
     internal Exception? ExecuteException { get; set; }
 
     internal int ExecuteResult { get; set; } = 1;
-
-    internal string? LastCommandText { get; private set; }
-
-    internal IReadOnlyDictionary<string, object?> LastCommandParameters { get; private set; }
-        = new Dictionary<string, object?>();
 
     internal static IDocumentStore Create(out RecordingDocumentSession recorder)
     {
@@ -124,12 +118,6 @@ internal class RecordingDocumentSession : DispatchProxy
 
         if (targetMethod.Name == "ExecuteAsync" && targetMethod.ReturnType == typeof(Task<int>))
         {
-            var command = AssertCommand(args);
-            LastCommandText = command.CommandText;
-            LastCommandParameters = command.Parameters
-                .Cast<NpgsqlParameter>()
-                .ToDictionary(parameter => parameter.ParameterName, parameter => parameter.Value);
-
             return ExecuteException is null
                 ? Task.FromResult(ExecuteResult)
                 : Task.FromException<int>(ExecuteException);
@@ -154,11 +142,6 @@ internal class RecordingDocumentSession : DispatchProxy
 
         throw new NotSupportedException($"The test session does not implement {targetMethod.Name}.");
     }
-
-    private static NpgsqlCommand AssertCommand(object?[]? args)
-        => args is [NpgsqlCommand command, CancellationToken]
-            ? command
-            : throw new InvalidOperationException("Expected a PostgreSQL command and cancellation token.");
 
     private class RecordingUnitOfWork : DispatchProxy
     {

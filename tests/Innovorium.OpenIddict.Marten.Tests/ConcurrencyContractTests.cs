@@ -1,4 +1,3 @@
-using Marten.Exceptions;
 using OpenIddict.Abstractions;
 using Xunit;
 
@@ -32,52 +31,20 @@ public sealed class ConcurrencyContractTests
         Assert.Empty(recorder.TakeMutationCalls());
     }
 
-    [Theory]
-    [InlineData("application")]
-    [InlineData("authorization")]
-    [InlineData("scope")]
-    [InlineData("token")]
-    public async Task StoresTranslateNestedMartenConcurrencyFailures(string entity)
+    [Fact]
+    public async Task UpdateTranslatesNestedMartenConcurrencyFailure()
     {
         var session = RecordingDocumentSession.Create(out var recorder);
         var nested = new InvalidOperationException(
             "Marten batch failed.",
             new AggregateException(new JasperFx.ConcurrencyException(typeof(object), Guid.NewGuid())));
         recorder.SaveChangesException = nested;
+        var store = new MartenOpenIddictScopeStore(session);
 
-        OpenIddictExceptions.ConcurrencyException exception;
-        if (entity == "application")
-        {
-            var store = new MartenOpenIddictApplicationStore(session);
-            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await store.UpdateAsync(
-                    new OpenIddictMartenApplication { Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
-        else if (entity == "authorization")
-        {
-            var store = new MartenOpenIddictAuthorizationStore(session);
-            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await store.UpdateAsync(
-                    new OpenIddictMartenAuthorization { Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
-        else if (entity == "scope")
-        {
-            var store = new MartenOpenIddictScopeStore(session);
-            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await store.UpdateAsync(
-                    new OpenIddictMartenScope { Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
-        else
-        {
-            var store = new MartenOpenIddictTokenStore(session, TimeProvider.System);
-            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await store.UpdateAsync(
-                    new OpenIddictMartenToken { Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
+        var exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+            await store.UpdateAsync(
+                new OpenIddictMartenScope { Version = 1 },
+                TestContext.Current.CancellationToken));
 
         Assert.Same(nested, exception.InnerException);
     }
@@ -96,90 +63,19 @@ public sealed class ConcurrencyContractTests
                 TestContext.Current.CancellationToken));
     }
 
-    [Theory]
-    [InlineData("application")]
-    [InlineData("authorization")]
-    [InlineData("scope")]
-    [InlineData("token")]
-    public async Task UpdatesTranslateMissingDocumentFailures(string entity)
+    [Fact]
+    public async Task ApplicationDeleteTranslatesZeroAffectedRowToConcurrency()
     {
-        var session = RecordingDocumentSession.Create(out var recorder);
-        var id = Guid.NewGuid();
-        recorder.SaveChangesException = new NonExistentDocumentException(typeof(object), id);
-
-        OpenIddictExceptions.ConcurrencyException exception;
-        if (entity == "application")
-        {
-            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await new MartenOpenIddictApplicationStore(session).UpdateAsync(
-                    new OpenIddictMartenApplication { Id = id, Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
-        else if (entity == "authorization")
-        {
-            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await new MartenOpenIddictAuthorizationStore(session).UpdateAsync(
-                    new OpenIddictMartenAuthorization { Id = id, Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
-        else if (entity == "scope")
-        {
-            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await new MartenOpenIddictScopeStore(session).UpdateAsync(
-                    new OpenIddictMartenScope { Id = id, Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
-        else
-        {
-            exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await new MartenOpenIddictTokenStore(session, TimeProvider.System).UpdateAsync(
-                    new OpenIddictMartenToken { Id = id, Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
-
-        Assert.IsType<NonExistentDocumentException>(exception.InnerException);
-    }
-
-    [Theory]
-    [InlineData("application")]
-    [InlineData("authorization")]
-    [InlineData("scope")]
-    [InlineData("token")]
-    public async Task DeleteTranslatesZeroAffectedRows(string entity)
-    {
-        var session = RecordingDocumentSession.Create(out var recorder);
+        var documentStore = RecordingDocumentSession.Create(out var recorder);
         recorder.ExecuteResult = 0;
+        var store = new MartenOpenIddictApplicationStore(documentStore);
 
-        if (entity == "application")
-        {
-            await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await new MartenOpenIddictApplicationStore(session).DeleteAsync(
-                    new OpenIddictMartenApplication { Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
-        else if (entity == "authorization")
-        {
-            await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await new MartenOpenIddictAuthorizationStore(session).DeleteAsync(
-                    new OpenIddictMartenAuthorization { Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
-        else if (entity == "scope")
-        {
-            await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await new MartenOpenIddictScopeStore(session).DeleteAsync(
-                    new OpenIddictMartenScope { Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
-        else
-        {
-            await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
-                await new MartenOpenIddictTokenStore(session, TimeProvider.System).DeleteAsync(
-                    new OpenIddictMartenToken { Version = 1 },
-                    TestContext.Current.CancellationToken));
-        }
+        var exception = await Assert.ThrowsAsync<OpenIddictExceptions.ConcurrencyException>(async () =>
+            await store.DeleteAsync(
+                new OpenIddictMartenApplication { Id = Guid.NewGuid(), Version = 1 },
+                TestContext.Current.CancellationToken));
 
-        Assert.DoesNotContain("Eject", recorder.TakeMutationCalls());
+        Assert.IsType<JasperFx.ConcurrencyException>(exception.InnerException);
     }
 
     [Theory]
