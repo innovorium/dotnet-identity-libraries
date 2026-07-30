@@ -41,7 +41,7 @@ jobs:
         id: nuget-login
         uses: NuGet/login@ebc737b6fc418a6ca0073cf116ec8dc156d8b81e # v1
         with:
-          user: Innovorium
+          user: meetdhruva
 
       - name: Publish to NuGet.org
         run: dotnet nuget push "artifacts/packages/*.nupkg" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate

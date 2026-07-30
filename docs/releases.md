@@ -23,7 +23,7 @@ Before creating a tag:
 
 Release artifacts include packages, symbol packages, and `SHA256SUMS`.
 
-NuGet.org publication uses trusted publishing with GitHub OIDC and a short-lived API key. Configure a NuGet trusted-publishing policy for the Innovorium owner, this repository, `release.yml`, and the `release` environment. The public NuGet owner name is declared directly in the workflow; no long-lived NuGet credential or repository secret is required.
+NuGet.org publication uses trusted publishing with GitHub OIDC and a short-lived API key. Configure a NuGet trusted-publishing policy for the Innovorium owner, this repository, `release.yml`, and the `release` environment. NuGet's `login` action requires the public username of the policy creator, which is declared directly in the workflow; no long-lived NuGet credential or repository secret is required.
 
 ## Failure policy
 
